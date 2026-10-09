@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0B1433">
+<title>会場の星空プランナー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+<style>
+:root{
+  --bg:#0B1433;--bg2:#111C45;--ink:#ECE7D6;--muted:#9AA3C7;--line:#25315E;
+  --amber:#F0BE62;--ok:#8FD3C1;--warn:#EE9A84;--hill:#130F1D;
+  color-scheme:dark;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#0B1433;--bg2:#111C45;--ink:#ECE7D6;--muted:#9AA3C7;--line:#25315E;--amber:#F0BE62;--ok:#8FD3C1;--warn:#EE9A84;--hill:#130F1D}
+}
+:root[data-theme="dark"]{--bg:#0B1433;--bg2:#111C45;--ink:#ECE7D6;--muted:#9AA3C7;--line:#25315E;--amber:#F0BE62;--ok:#8FD3C1;--warn:#EE9A84;--hill:#130F1D}
+html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 "Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;-webkit-text-size-adjust:100%}
+body.red{background:#000}
+body.red main,body.red #ar{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(-48deg) brightness(.75)}
+main{max-width:720px;margin:0 auto;padding:10px 16px 48px}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
+.top button{background:none;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--muted)}
+.top button[aria-pressed="true"]{color:#ff8a7a;border-color:#7a2a2a}
+.venues{display:flex;gap:8px;overflow-x:auto;padding:12px 0 4px;margin:0 -16px;padding-inline:16px;scrollbar-width:none}
+.venues::-webkit-scrollbar{display:none}
+.venues button{flex:none;background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px;color:var(--muted)}
+.venues button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h1{font-family:"Shippori Mincho B1","Hiragino Mincho ProN",serif;font-weight:800;font-size:clamp(28px,8vw,42px);line-height:1.2;margin:16px 0 2px;letter-spacing:.02em}
+.coords{color:var(--muted);font-size:12px}
+.when{display:flex;align-items:baseline;gap:14px;margin:14px 0 4px;flex-wrap:wrap}
+input[type=date]{background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:16px}
+.timebig{font-family:"Shippori Mincho B1",serif;font-size:34px;font-weight:600;line-height:1}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.rangelabels{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:-2px}
+.lead{font-family:"Shippori Mincho B1",serif;font-size:17px;line-height:1.85;margin:14px 0 12px}
+.pano{margin:0 -16px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-block:1px solid var(--line);background:var(--hill)}
+.pano canvas{display:block}
+.dirbtns{display:flex;gap:6px;justify-content:center;margin:10px 0 20px}
+.dirbtns button{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 16px}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0}
+.facts div{background:var(--bg2);padding:10px 12px}
+.facts dt{font-size:11px;color:var(--muted)}
+.facts dd{margin:0;font-size:17px;font-weight:500}
+h2{font-family:"Shippori Mincho B1",serif;font-size:21px;margin:30px 0 4px}
+.hint{color:var(--muted);font-size:13px;margin:0 0 8px}
+ul.rows{list-style:none;margin:0;padding:0}
+.rows li{display:grid;grid-template-columns:14px 1fr auto;column-gap:10px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.rows .dot{grid-row:1/3;width:10px;height:10px;border-radius:50%}
+.rows .nm{font-weight:500}
+.rows .pos{grid-column:2;color:var(--muted);font-size:13px}
+.rows .note{grid-column:2/4;color:var(--muted);font-size:12px}
+.chip{grid-row:1/3;grid-column:3;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.ok{color:var(--ok)}.hidden{color:var(--warn)}.low{color:var(--amber)}.below,.faint{color:var(--muted)}
+details{border:1px solid var(--line);border-radius:10px;margin-top:14px;background:var(--bg2)}
+summary{padding:12px 14px;cursor:pointer;font-weight:500}
+.dbody{padding:0 14px 14px}
+.obst{display:grid;grid-template-columns:3.2em 1fr 3em;gap:6px 10px;align-items:center}
+.obst output{text-align:right;font-variant-numeric:tabular-nums}
+.vlist{list-style:none;padding:0;margin:0 0 12px}
+.vlist li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:8px}
+.vlist small{color:var(--muted);display:block}
+.vlist button{background:none;border:1px solid var(--line);border-radius:8px;padding:4px 12px;font-size:13px;color:var(--muted)}
+.vlist button.armed{color:#fff;background:#8e3b30;border-color:#8e3b30}
+.addv{display:grid;gap:8px}
+.addv input{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px;width:100%}
+.addv button{background:var(--ink);color:var(--bg);border:none;border-radius:8px;padding:9px;font-weight:700}
+.msg{font-size:13px;min-height:1.4em;color:var(--warn)}
+.err{padding:16px;border:1px solid var(--warn);border-radius:10px;color:var(--warn);margin-top:16px}
+.arbtn{display:block;width:100%;margin:4px 0 14px;padding:13px;border:none;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;font-size:16px}
+#ar{position:fixed;inset:0;z-index:50;background:#060B22;touch-action:none;-webkit-user-select:none;user-select:none}
+#ar[hidden]{display:none}
+#arsky{position:absolute;inset:0;display:block}
+.arbar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 28px;background:linear-gradient(rgba(6,11,34,.85),rgba(6,11,34,0));pointer-events:none}
+.arbar strong{display:block;font-family:"Shippori Mincho B1",serif;font-size:20px}
+.arbar span{font-size:13px;color:var(--muted)}
+.arbar button,.arbtns button{pointer-events:auto;background:rgba(17,28,69,.85);border:1px solid var(--line);border-radius:999px;padding:7px 16px;color:var(--ink)}
+.arfoot{position:absolute;left:0;right:0;bottom:0;padding:32px 16px calc(env(safe-area-inset-bottom,0px) + 14px);text-align:center;background:linear-gradient(rgba(6,11,34,0),rgba(6,11,34,.85));pointer-events:none}
+#arread{font-family:"Shippori Mincho B1",serif;font-size:22px}
+#armsg{font-size:13px;color:var(--muted);margin:4px auto 10px;max-width:30em}
+.arbtns{display:flex;gap:8px;justify-content:center}
+.arbtns button[hidden]{display:none}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><span>会場の星空プランナー</span><button id="redbtn" aria-pressed="false">赤色ライト</button></div>
+  <nav class="venues" id="venues" aria-label="会場"></nav>
+  <h1 id="vname"></h1>
+  <div class="coords" id="vcoords"></div>
+
+  <div class="when">
+    <input type="date" id="date" aria-label="日付">
+    <span class="timebig" id="timelabel">19:30</span>
+  </div>
+  <input type="range" id="time" min="0" max="420" step="10" value="150" aria-label="時刻">
+  <div class="rangelabels"><span>17:00</span><span>18:30</span><span>20:30</span><span>24:00</span></div>
+
+  <p class="lead" id="lead"></p>
+
+  <button id="arbtn" class="arbtn">空にかざして見る</button>
+  <div class="pano" id="pano"><canvas id="sky" role="img" aria-label="会場から見た全方位の空"></canvas></div>
+  <div class="dirbtns"><button data-az="0">北</button><button data-az="90">東</button><button data-az="180">南</button><button data-az="270">西</button></div>
+
+  <dl class="facts" id="facts"></dl>
+
+  <h2>惑星と月</h2>
+  <p class="hint">タップすると上の空の図でその位置を示します。</p>
+  <ul class="rows" id="plist"></ul>
+
+  <h2>星座</h2>
+  <p class="hint">地平線より上にある星座を、高い順に並べています。</p>
+  <ul class="rows" id="clist"></ul>
+
+  <details id="obstd">
+    <summary>この会場の障害物の高さ</summary>
+    <div class="dbody">
+      <p class="hint">木や建物、城壁などが、その方角の空をどの高さまで隠すかの目安です。会場で腕をまっすぐ伸ばすと、握りこぶし1つ分がおよそ10°です。</p>
+      <div class="obst" id="obst"></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>会場の追加・削除</summary>
+    <div class="dbody">
+      <ul class="vlist" id="vlist"></ul>
+      <div class="addv">
+        <input id="newname" placeholder="会場名">
+        <input id="newcoords" placeholder="緯度, 経度（Googleマップからコピー）" inputmode="decimal">
+        <button id="addbtn">会場を追加</button>
+        <div class="msg" id="addmsg" aria-live="polite"></div>
+      </div>
+    </div>
+  </details>
+  <div id="errbox"></div>
+</main>
+<div id="ar" hidden>
+  <canvas id="arsky" aria-label="かざした方向の星空"></canvas>
+  <div class="arbar"><div><strong id="arvenue"></strong><span id="artime"></span></div><button id="arclose">閉じる</button></div>
+  <div class="arfoot"><div id="arread"></div><div id="armsg"></div><div class="arbtns"><button id="armode" hidden>指で動かす</button><button id="aroff" hidden>補正を戻す</button></div></div>
+</div>
+
+<script>
+/* ===== データ ===== */
+const DEFAULT_VENUES=[
+ {id:'heiwa',name:'平和創造の森公園',lat:26.084328,lon:127.687769},
+ {id:'rycom',name:'イオンモール沖縄ライカム',lat:26.314247,lon:127.796890},
+ {id:'bios',name:'ビオスの丘',lat:26.421626,lon:127.797914},
+ {id:'nakagusuku',name:'中城城跡',lat:26.284715,lon:127.802676},
+ {id:'katsuren',name:'勝連城跡',lat:26.330137,lon:127.879420}
+];
+// [赤経(時), 赤緯(度), 等級, 表示名]  J2000
+const STARS={
+ betel:[5.919,7.407,0.5,'ベテルギウス'],rigel:[5.242,-8.202,0.13,'リゲル'],bella:[5.419,6.350,1.64],saiph:[5.796,-9.670,2.06],alnitak:[5.679,-1.943,1.77],alnilam:[5.604,-1.202,1.69],mintaka:[5.533,-0.299,2.23],meissa:[5.585,9.934,3.4],
+ alde:[4.599,16.509,0.85,'アルデバラン'],elnath:[5.438,28.608,1.65],zetaTau:[5.627,21.143,3.0],ainTau:[4.477,19.180,3.5],gamTau:[4.330,15.628,3.65],delTau:[4.382,17.543,3.8],pleiades:[3.791,24.105,1.6,'すばる'],
+ castor:[7.577,31.888,1.58,'カストル'],pollux:[7.755,28.026,1.14,'ポルックス'],alhena:[6.629,16.399,1.93],mebsuta:[6.732,25.131,3.0],wasat:[7.335,21.982,3.5],tejat:[6.383,22.514,2.9],
+ sirius:[6.752,-16.716,-1.46,'シリウス'],mirzam:[6.378,-17.956,1.98],adhara:[6.977,-28.972,1.5],wezen:[7.140,-26.393,1.83],aludra:[7.402,-29.303,2.45],
+ procyon:[7.655,5.225,0.34,'プロキオン'],gomeisa:[7.453,8.289,2.9],
+ capella:[5.278,45.998,0.08,'カペラ'],menkal:[5.992,44.948,1.9],mahasim:[5.995,37.213,2.6],hassaleh:[4.950,33.166,2.7],
+ regulus:[10.139,11.967,1.35,'レグルス'],denebola:[11.818,14.572,2.14],algieba:[10.333,19.842,2.0],zosma:[11.235,20.524,2.56],chertan:[11.237,15.430,3.3],etaLeo:[10.122,16.763,3.5],adhafera:[10.278,23.417,3.4],muLeo:[9.879,26.007,3.9],epsLeo:[9.764,23.774,3.0],
+ spica:[13.420,-11.161,0.97,'スピカ'],porrima:[12.694,-1.449,2.74],vindem:[13.036,10.959,2.8],delVir:[12.927,3.397,3.4],zetVir:[13.578,-0.596,3.4],betVir:[11.845,1.765,3.6],
+ arcturus:[14.261,19.182,-0.05,'アークトゥルス'],izar:[14.750,27.074,2.37],muphrid:[13.911,18.398,2.68],seginus:[14.535,38.308,3.0],nekkar:[15.032,40.390,3.5],delBoo:[15.258,33.315,3.5],
+ alphecca:[15.578,26.715,2.2],betCrB:[15.464,29.106,3.7],gamCrB:[15.713,26.296,3.8],theCrB:[15.549,31.359,4.1],delCrB:[15.826,26.068,4.6],
+ antares:[16.490,-26.432,1.0,'アンタレス'],acrab:[16.091,-19.806,2.6],dschubba:[16.006,-22.622,2.3],piSco:[15.981,-26.114,2.9],sigSco:[16.353,-25.593,2.9],tauSco:[16.598,-28.216,2.8],epsSco:[16.836,-34.293,2.3],muSco:[16.864,-38.048,3.0],zetSco:[16.909,-42.362,3.6],etaSco:[17.203,-43.239,3.3],sargas:[17.622,-42.998,1.86],iotSco:[17.793,-40.127,3.0],kapSco:[17.708,-39.030,2.4],shaula:[17.560,-37.104,1.62],lesath:[17.513,-37.296,2.7],
+ kausA:[18.403,-34.385,1.85],nunki:[18.921,-26.297,2.05],ascella:[19.044,-29.880,2.6],kausM:[18.350,-29.828,2.7],kausB:[18.466,-25.422,2.8],phiSgr:[18.761,-26.991,3.2],tauSgr:[19.116,-27.671,3.3],alnasl:[18.097,-30.424,3.0],
+ vega:[18.616,38.784,0.03,'ベガ（織姫星）'],sheliak:[18.835,33.363,3.5],sulafat:[18.982,32.690,3.25],zetLyr:[18.746,37.605,4.3],delLyr:[18.908,36.899,4.3],
+ deneb:[20.690,45.280,1.25,'デネブ'],sadr:[20.370,40.257,2.23],albireo:[19.512,27.960,3.1],gienahCyg:[20.770,33.970,2.48],delCyg:[19.750,45.131,2.87],etaCyg:[19.938,35.083,3.9],
+ altair:[19.846,8.868,0.76,'アルタイル（彦星）'],tarazed:[19.771,10.613,2.7],alshain:[19.922,6.407,3.7],delAql:[19.425,3.115,3.4],zetAql:[19.090,13.863,3.0],lamAql:[19.104,-4.883,3.4],theAql:[20.188,-0.822,3.2],
+ dubhe:[11.062,61.751,1.8],merak:[11.031,56.382,2.37],phecda:[11.897,53.695,2.44],megrez:[12.257,57.033,3.3],alioth:[12.900,55.960,1.77],mizar:[13.399,54.925,2.27],alkaid:[13.792,49.313,1.86],
+ polaris:[2.530,89.264,1.98,'北極星'],kochab:[14.845,74.156,2.08],pherkad:[15.345,71.834,3.0],delUMi:[17.537,86.586,4.4],epsUMi:[16.766,82.037,4.2],zetUMi:[15.734,77.794,4.3],etaUMi:[16.292,75.755,4.9],
+ caph:[0.153,59.150,2.28],schedar:[0.675,56.537,2.24],gamCas:[0.945,60.717,2.15],ruchbah:[1.430,60.235,2.66],segin:[1.907,63.670,3.35],
+ markab:[23.079,15.205,2.48],scheat:[23.063,28.083,2.42],algenib:[0.220,15.184,2.83],alpheratz:[0.140,29.091,2.06],enif:[21.736,9.875,2.38],homam:[22.691,10.831,3.4],
+ delAnd:[0.656,30.861,3.3],mirach:[1.162,35.621,2.05],almach:[2.065,42.330,2.1],
+ mirfak:[3.405,49.861,1.8],algol:[3.136,40.956,2.1],gamPer:[3.080,53.506,2.9],delPer:[3.715,47.788,3.0],epsPer:[3.964,40.010,2.9],zetPer:[3.902,31.884,2.85],
+ hamal:[2.120,23.462,2.0],sheratan:[1.911,20.808,2.65],mesarthim:[1.892,19.294,3.9],
+ algedi:[20.300,-12.545,3.6],dabih:[20.350,-14.781,3.05],omeCap:[20.864,-26.919,4.1],zetCap:[21.444,-22.411,3.7],gamCap:[21.668,-16.662,3.7],denebAlgedi:[21.784,-16.127,2.85],theCap:[21.099,-17.233,4.1],
+ acrux:[12.443,-63.099,0.77,'アクルックス'],mimosa:[12.795,-59.689,1.25,'ミモザ'],gacrux:[12.519,-57.113,1.6,'ガクルックス'],delCru:[12.252,-58.749,2.8],
+ rigil:[14.660,-60.835,-0.27,'リギル・ケンタウルス'],hadar:[14.064,-60.373,0.61,'ハダル'],
+ canopus:[6.399,-52.696,-0.74,'カノープス'],achernar:[1.629,-57.237,0.46,'アケルナル'],fomalhaut:[22.961,-29.622,1.16,'フォーマルハウト'],alnair:[22.137,-46.961,1.7,'アルナイル'],alphard:[9.460,-8.659,2.0,'アルファルド'],
+ gienahCrv:[12.263,-17.542,2.6],kraz:[12.573,-23.397,2.65],algorab:[12.498,-16.515,2.95],minkar:[12.169,-22.620,3.0],
+ zubenG:[14.848,-16.042,2.75],zubenS:[15.283,-9.383,2.6],sigLib:[15.068,-25.282,3.3],
+ piHer:[17.251,36.809,3.2],etaHer:[16.714,38.922,3.5],zetHer:[16.688,31.603,2.8],epsHer:[17.005,30.926,3.9],betHer:[16.504,21.490,2.8],
+ rasalhague:[17.582,12.560,2.08],sabik:[17.173,-15.725,2.4],yedPrior:[16.239,-3.694,2.75],zetOph:[16.619,-10.567,2.55],cebalrai:[17.725,4.567,2.75],kapOph:[16.961,9.375,3.2],
+ diphda:[0.727,-17.987,2.0],sadalsuud:[21.526,-5.571,2.9],sadalmelik:[22.096,-0.320,2.95]
+};
+const L=s=>s.split(' ').map(p=>p.split('-'));
+const CONS=[
+ {n:'オリオン座',l:L('meissa-betel meissa-bella betel-bella betel-alnitak bella-mintaka alnitak-alnilam alnilam-mintaka alnitak-saiph mintaka-rigel')},
+ {n:'おうし座',l:L('gamTau-delTau delTau-ainTau ainTau-elnath gamTau-alde alde-zetaTau'),s:['pleiades'],note:'すばる（プレアデス星団）を含みます'},
+ {n:'ふたご座',l:L('castor-mebsuta mebsuta-tejat pollux-wasat wasat-alhena castor-pollux')},
+ {n:'おおいぬ座',l:L('mirzam-sirius sirius-wezen wezen-adhara wezen-aludra')},
+ {n:'こいぬ座',l:L('procyon-gomeisa')},
+ {n:'ぎょしゃ座',l:L('capella-menkal menkal-mahasim mahasim-elnath elnath-hassaleh hassaleh-capella')},
+ {n:'しし座',l:L('regulus-etaLeo etaLeo-algieba algieba-adhafera adhafera-muLeo muLeo-epsLeo algieba-zosma zosma-denebola denebola-chertan chertan-regulus chertan-zosma')},
+ {n:'おとめ座',l:L('betVir-porrima porrima-delVir delVir-vindem porrima-spica delVir-zetVir zetVir-spica')},
+ {n:'うしかい座',l:L('arcturus-muphrid arcturus-izar izar-delBoo delBoo-nekkar nekkar-seginus seginus-arcturus')},
+ {n:'かんむり座',l:L('theCrB-betCrB betCrB-alphecca alphecca-gamCrB gamCrB-delCrB')},
+ {n:'さそり座',l:L('acrab-dschubba dschubba-piSco dschubba-sigSco sigSco-antares antares-tauSco tauSco-epsSco epsSco-muSco muSco-zetSco zetSco-etaSco etaSco-sargas sargas-iotSco iotSco-kapSco kapSco-shaula shaula-lesath')},
+ {n:'いて座',l:L('alnasl-kausM kausM-kausA kausA-alnasl kausA-ascella ascella-phiSgr phiSgr-kausM kausM-kausB kausB-phiSgr phiSgr-nunki nunki-tauSgr tauSgr-ascella'),note:'南斗六星・天の川の濃いあたり'},
+ {n:'こと座',l:L('vega-zetLyr zetLyr-sheliak sheliak-sulafat sulafat-delLyr delLyr-zetLyr')},
+ {n:'はくちょう座',l:L('deneb-sadr sadr-etaCyg etaCyg-albireo delCyg-sadr sadr-gienahCyg')},
+ {n:'わし座',l:L('zetAql-tarazed tarazed-altair altair-alshain alshain-theAql altair-delAql delAql-lamAql')},
+ {n:'北斗七星（おおぐま座）',l:L('dubhe-merak merak-phecda phecda-megrez megrez-dubhe megrez-alioth alioth-mizar mizar-alkaid')},
+ {n:'こぐま座',l:L('polaris-delUMi delUMi-epsUMi epsUMi-zetUMi zetUMi-etaUMi etaUMi-pherkad pherkad-kochab kochab-zetUMi')},
+ {n:'カシオペヤ座',l:L('caph-schedar schedar-gamCas gamCas-ruchbah ruchbah-segin')},
+ {n:'ペガスス座',l:L('markab-scheat scheat-alpheratz alpheratz-algenib algenib-markab markab-homam homam-enif'),note:'秋の四辺形'},
+ {n:'アンドロメダ座',l:L('alpheratz-delAnd delAnd-mirach mirach-almach')},
+ {n:'ペルセウス座',l:L('gamPer-mirfak mirfak-delPer delPer-epsPer epsPer-zetPer mirfak-algol')},
+ {n:'おひつじ座',l:L('hamal-sheratan sheratan-mesarthim')},
+ {n:'やぎ座',l:L('algedi-dabih dabih-omeCap omeCap-zetCap zetCap-denebAlgedi denebAlgedi-gamCap gamCap-theCap theCap-algedi')},
+ {n:'みずがめ座',l:L('sadalsuud-sadalmelik')},
+ {n:'くじら座（ディフダ）',l:[],s:['diphda']},
+ {n:'みなみじゅうじ座',l:L('acrux-gacrux mimosa-delCru'),note:'沖縄ならではの見どころ。南の地平線すれすれ'},
+ {n:'ケンタウルス座',l:L('rigil-hadar'),note:'αとβは南の地平線すれすれ'},
+ {n:'からす座',l:L('gienahCrv-algorab algorab-kraz kraz-minkar minkar-gienahCrv')},
+ {n:'てんびん座',l:L('zubenS-zubenG zubenG-sigLib')},
+ {n:'ヘルクレス座',l:L('piHer-etaHer etaHer-zetHer zetHer-epsHer epsHer-piHer zetHer-betHer')},
+ {n:'へびつかい座',l:L('rasalhague-kapOph kapOph-yedPrior yedPrior-zetOph zetOph-sabik sabik-cebalrai cebalrai-rasalhague')},
+ {n:'りゅうこつ座（カノープス）',l:[],s:['canopus'],note:'見えると長寿になるといわれる南極老人星'},
+ {n:'エリダヌス座（アケルナル）',l:[],s:['achernar']},
+ {n:'みなみのうお座（フォーマルハウト）',l:[],s:['fomalhaut'],note:'秋の南の空でひとつだけ明るい星'},
+ {n:'つる座（アルナイル）',l:[],s:['alnair']},
+ {n:'うみへび座（アルファルド）',l:[],s:['alphard']}
+];
+CONS.forEach(c=>{const set=new Set(c.s||[]);c.l.forEach(([a,b])=>{set.add(a);set.add(b)});c.stars=[...set];});
+const PLANETS=[['Mercury','水星','#CDBFAE'],['Venus','金星','#FFF3C8'],['Mars','火星','#F2895E'],['Jupiter','木星','#F3D6A6'],['Saturn','土星','#E9C878']];
+
+/* ===== 定数・ユーティリティ ===== */
+const $=s=>document.querySelector(s);
+const K=5,AZ0=-45,AZ1=405,AMIN=-6,AMAX=80,W=(AZ1-AZ0)*K,H=(AMAX-AMIN)*K,rad=Math.PI/180;
+const xOf=az=>(az-AZ0)*K, yOf=alt=>(AMAX-alt)*K;
+const DIRS16=['北','北北東','北東','東北東','東','東南東','南東','南南東','南','南南西','南西','西南西','西','西北西','北西','北北西'];
+const DIRS8=['北','北東','東','南東','南','南西','西','北西'];
+const norm=a=>((a%360)+360)%360;
+const dirName=az=>DIRS16[Math.round(norm(az)/22.5)%16];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const TZ='Asia/Tokyo';
+const fmtDate=d=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+const fmtHM=d=>new Intl.DateTimeFormat('ja-JP',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+
+const KEY='hoshizora-planner-v1';
+function load(){try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&Array.isArray(j.venues))return Object.assign({obstacles:{},red:false},j);}catch(e){}return{venues:DEFAULT_VENUES.slice(),obstacles:{},selected:DEFAULT_VENUES[0].id,red:false};}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+let S=load();
+const curVenue=()=>S.venues.find(v=>v.id===S.selected)||S.venues[0];
+const obstOf=v=>S.obstacles[v.id]||[0,0,0,0,0,0,0,0];
+function horizonAlt(az,arr){az=norm(az);const i=Math.floor(az/45)%8,f=(az-i*45)/45,f2=(1-Math.cos(Math.PI*f))/2;return arr[i]+(arr[(i+1)%8]-arr[i])*f2;}
+
+function starAltAz(ra,dec,lat,lon,gast){
+  const ha=((gast+lon/15-ra)*15)*rad,d=dec*rad,p=lat*rad;
+  let alt=Math.asin(Math.sin(p)*Math.sin(d)+Math.cos(p)*Math.cos(d)*Math.cos(ha))/rad;
+  const az=norm(Math.atan2(-Math.cos(d)*Math.sin(ha),Math.sin(d)*Math.cos(p)-Math.cos(d)*Math.sin(p)*Math.cos(ha))/rad);
+  if(alt>-1) alt+=1.02/Math.tan((alt+10.3/(alt+5.11))*rad)/60;
+  return {alt,az};
+}
+function selTime(){const base=new Date($('#date').value+'T17:00:00+09:00');return new Date(base.getTime()+(+$('#time').value)*60000);}
+function moonAge(t){
+  let nm=Astronomy.SearchMoonPhase(0,new Date(t.getTime()-35*864e5),40);
+  for(let i=0;i<3&&nm;i++){const nx=Astronomy.SearchMoonPhase(0,new Date(nm.date.getTime()+864e5),40);if(!nx||nx.date>t)break;nm=nx;}
+  return nm?(t-nm.date)/864e5:null;
+}
+let eveKey='',eve=null;
+function evening(v,obs,dateStr){
+  const key=v.id+'|'+v.lat+'|'+dateStr; if(key===eveKey) return eve;
+  const start=new Date(dateStr+'T12:00:00+09:00');
+  const g=f=>{try{const r=f();return r?r.date:null;}catch(e){return null;}};
+  eve={
+    sunset:g(()=>Astronomy.SearchRiseSet('Sun',obs,-1,start,1)),
+    dark:g(()=>Astronomy.SearchAltitude('Sun',obs,-1,start,1,-18)),
+    mrise:g(()=>Astronomy.SearchRiseSet('Moon',obs,+1,start,1)),
+    mset:g(()=>Astronomy.SearchRiseSet('Moon',obs,-1,start,1))
+  };
+  eveKey=key; return eve;
+}
+function hmLabel(d,dateStr){if(!d)return '—';return (fmtDate(d)!==dateStr?'翌':'')+fmtHM(d);}
+function mixHex(a,b,t){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')';}
+function skyColors(sunAlt){
+  const s=clamp(sunAlt,-18,2);
+  if(s<=-9){const t=(s+18)/9;return[mixHex('#060B22','#18295E',t),mixHex('#111E48','#5E5486',t)];}
+  const t=(s+9)/11;return[mixHex('#18295E','#3C6AAE',t),mixHex('#5E5486','#C79C7A',t)];
+}
+function status(alt,az,obst,mag,lim){
+  if(alt<0) return ['地平線の下','below'];
+  if(alt<horizonAlt(az,obst)) return ['障害物の陰','hidden'];
+  if(mag!=null&&mag>lim) return ['空が明るく見えにくい','faint'];
+  if(alt<10) return ['低い空','low'];
+  return ['見える','ok'];
+}
+
+/* ===== キャンバス ===== */
+const cv=$('#sky'),ctx=cv.getContext('2d'),mainCtx=ctx;
+function sizeCanvas(){const dpr=Math.min(window.devicePixelRatio||1,3);cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);}
+sizeCanvas();
+const SHIFTS=[-360,0,360];
+function eachX(az,fn){for(const sh of SHIFTS){const x=xOf(az+sh);if(x>-40&&x<W+40)fn(x);}}
+function drawMoon(x,y,r,phase,ctx=mainCtx){
+  ctx.save();
+  ctx.shadowColor='rgba(240,230,190,.6)';ctx.shadowBlur=14;
+  ctx.fillStyle='#2C2F45';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  const waxing=phase<180,c=Math.cos(phase*rad),rx=Math.abs(c)*r,cres=c>0;
+  ctx.fillStyle='#EDE6C8';ctx.beginPath();
+  if(waxing){ctx.arc(x,y,r,-Math.PI/2,Math.PI/2,false);
+    if(cres) ctx.ellipse(x,y,rx,r,0,Math.PI/2,-Math.PI/2,true); else ctx.ellipse(x,y,rx,r,0,Math.PI/2,Math.PI*1.5,false);}
+  else{ctx.arc(x,y,r,Math.PI/2,Math.PI*1.5,false);
+    if(cres) ctx.ellipse(x,y,rx,r,0,Math.PI*1.5,Math.PI/2,true); else ctx.ellipse(x,y,rx,r,0,-Math.PI/2,Math.PI/2,false);}
+  ctx.fill();ctx.restore();
+}
+let flash=null;
+function draw(D){
+  const {pos,sun,moon,planets,obst,lim,cons}=D;
+  const [top,hor]=skyColors(sun.alt);
+  const g=ctx.createLinearGradient(0,0,0,yOf(0));g.addColorStop(0,top);g.addColorStop(1,hor);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,yOf(0)+1);
+  const dark=clamp((-sun.alt-4)/14,0,1);
+  // 高度の目盛
+  ctx.strokeStyle='rgba(190,205,245,.13)';ctx.setLineDash([3,5]);ctx.lineWidth=1;
+  ctx.font='11px "Zen Kaku Gothic New",sans-serif';ctx.fillStyle='rgba(190,205,245,.4)';
+  for(const a of [30,60]){ctx.beginPath();ctx.moveTo(0,yOf(a));ctx.lineTo(W,yOf(a));ctx.stroke();for(let az=0;az<=360;az+=90)ctx.fillText(a+'°',xOf(az)+4,yOf(a)-4);}
+  ctx.setLineDash([]);
+  // 星座線
+  ctx.strokeStyle=`rgba(150,175,235,${0.16+0.3*dark})`;ctx.lineWidth=1;
+  for(const c of CONS)for(const [a,b] of c.l){
+    const A=pos[a],B=pos[b];if(A.alt<AMIN-4&&B.alt<AMIN-4)continue;
+    let bz=B.az;if(bz-A.az>180)bz-=360;if(A.az-bz>180)bz+=360;
+    for(const sh of SHIFTS){const x1=xOf(A.az+sh),x2=xOf(bz+sh);if(Math.max(x1,x2)<-10||Math.min(x1,x2)>W+10)continue;
+      ctx.beginPath();ctx.moveTo(x1,yOf(A.alt));ctx.lineTo(x2,yOf(B.alt));ctx.stroke();}
+  }
+  // 恒星
+  for(const id in STARS){const s=STARS[id],p=pos[id];if(p.alt<AMIN-2)continue;
+    const vis=clamp((lim+0.4-s[2])/1.2,0.12,1);if(s[2]>lim+0.4)continue;
+    const r=Math.max(0.8,2.9-0.5*s[2]);
+    eachX(p.az,x=>{ctx.fillStyle=`rgba(245,243,232,${vis})`;ctx.beginPath();ctx.arc(x,yOf(p.alt),r,0,Math.PI*2);ctx.fill();
+      if(s[3]&&s[2]<=lim){ctx.fillStyle=`rgba(236,231,214,${0.55*vis})`;ctx.fillText(s[3],x+r+4,yOf(p.alt)+4);}});
+  }
+  // 星座名
+  ctx.font='12px "Zen Kaku Gothic New",sans-serif';ctx.fillStyle=`rgba(160,185,240,${0.35+0.4*dark})`;ctx.textAlign='center';
+  for(const c of cons){if(c.alt<-2||c.single)continue;eachX(c.az,x=>ctx.fillText(c.short,x,yOf(c.alt)+18));}
+  ctx.textAlign='left';
+  // 惑星
+  ctx.font='600 13px "Zen Kaku Gothic New",sans-serif';
+  for(const p of planets){if(p.alt<AMIN-2)continue;eachX(p.az,x=>{const y=yOf(p.alt);ctx.save();ctx.shadowColor=p.c;ctx.shadowBlur=10;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.restore();ctx.fillStyle=p.c;ctx.fillText(p.n,x+8,y-6);});}
+  // 月
+  if(moon.alt>AMIN-3) eachX(moon.az,x=>{drawMoon(x,yOf(moon.alt),9,moon.phase);ctx.fillStyle='#EDE6C8';ctx.fillText('月',x+13,yOf(moon.alt)-8);});
+  // 障害物・地面
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--hill').trim()||'#130F1D';
+  ctx.beginPath();ctx.moveTo(0,H);for(let az=AZ0;az<=AZ1;az+=1)ctx.lineTo(xOf(az),yOf(Math.max(0,horizonAlt(az,obst))));ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(150,140,180,.35)';ctx.beginPath();for(let az=AZ0;az<=AZ1;az+=1){const y=yOf(Math.max(0,horizonAlt(az,obst)));az===AZ0?ctx.moveTo(xOf(az),y):ctx.lineTo(xOf(az),y);}ctx.stroke();
+  // 障害物に隠れた惑星・月を点線で
+  ctx.setLineDash([3,3]);ctx.lineWidth=1.2;ctx.font='12px "Zen Kaku Gothic New",sans-serif';
+  const hid=[...planets.map(p=>({...p})),{n:'月',c:'#EDE6C8',alt:moon.alt,az:moon.az}];
+  for(const p of hid){if(p.alt<0||p.alt>=horizonAlt(p.az,obst))continue;
+    eachX(p.az,x=>{const y=yOf(p.alt);ctx.strokeStyle=p.c;ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.fillStyle=p.c;ctx.fillText(p.n+'（陰）',x+10,y+4);});}
+  ctx.setLineDash([]);
+  // 方角
+  ctx.font='700 14px "Zen Kaku Gothic New",sans-serif';ctx.textAlign='center';ctx.fillStyle='#C9C3B2';
+  for(let az=-45;az<=405;az+=45){ctx.fillText(DIRS8[norm(az)/45],xOf(az),H-10);}
+  ctx.textAlign='left';
+  // ハイライト
+  if(flash&&Date.now()-flash.t0<1800){eachX(flash.az,x=>{ctx.strokeStyle='#F0BE62';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,yOf(Math.max(flash.alt,AMIN+2)),18,0,Math.PI*2);ctx.stroke();});}
+}
+
+/* ===== 計算と表示 ===== */
+let lastD=null;
+function render(){
+  const v=curVenue();
+  if(!v){$('#vname').textContent='会場を追加してください';$('#lead').textContent='下の「会場の追加・削除」から会場を登録すると、空の図が表示されます。';return;}
+  const dateStr=$('#date').value,t=selTime(),obs=new Astronomy.Observer(v.lat,v.lon,0),obst=obstOf(v);
+  $('#timelabel').textContent=fmtHM(t)==='00:00'?'24:00':fmtHM(t);
+  const gast=Astronomy.SiderealTime(t);
+  const pos={};for(const id in STARS){const s=STARS[id];pos[id]=starAltAz(s[0],s[1],v.lat,v.lon,gast);}
+  const hz=b=>{const e=Astronomy.Equator(b,t,obs,true,true);const h=Astronomy.Horizon(t,obs,e.ra,e.dec,'normal');return{alt:h.altitude,az:h.azimuth};};
+  const sun=hz('Sun'),m=hz('Moon');
+  const moon={...m,phase:Astronomy.MoonPhase(t),ill:Astronomy.Illumination('Moon',t).phase_fraction};
+  const planets=PLANETS.map(([b,n,c])=>({...hz(b),n,c,mag:Astronomy.Illumination(b,t).mag}));
+  let lim=sun.alt>-0.8?-1.5:sun.alt>-6?0.5:sun.alt>-12?2.5:sun.alt>-18?3.8:4.6;
+  if(moon.alt>0) lim-=moon.ill*1.0;
+  const cons=CONS.map(c=>{let sx=0,sy=0,sa=0,up=0,hidden=0;
+    for(const id of c.stars){const p=pos[id];sx+=Math.cos(p.az*rad);sy+=Math.sin(p.az*rad);sa+=p.alt;
+      if(p.alt>0){if(p.alt>=horizonAlt(p.az,obst))up++;else hidden++;}}
+    const n=c.stars.length;return{...c,az:norm(Math.atan2(sy,sx)/rad),alt:sa/n,up,hidden,total:n,single:c.l.length===0,short:c.n.replace(/（.*）/,'')};});
+  const D={pos,sun,moon,planets,obst,lim,cons};lastD=D;
+  draw(D);
+
+  // 一文の要約
+  const vis=planets.filter(p=>status(p.alt,p.az,obst,p.mag,lim)[1]==='ok'||status(p.alt,p.az,obst,p.mag,lim)[1]==='low').sort((a,b)=>b.alt-a.alt);
+  const hidP=planets.filter(p=>status(p.alt,p.az,obst)[1]==='hidden');
+  const age=moonAge(t);
+  let s=vis.length?vis.map(p=>`${dirName(p.az)}に${p.n}`).join('、')+'。':'見えている惑星はありません。';
+  if(hidP.length) s+=hidP.map(p=>p.n).join('・')+'は障害物の陰です。';
+  if(moon.alt>0){const ms=status(moon.alt,moon.az,obst)[1];s+=`月（月齢${age!=null?age.toFixed(1):'—'}）は${dirName(moon.az)}の高さ${Math.round(moon.alt)}°`+(ms==='hidden'?'で、障害物の陰。':'。')+(moon.ill>0.5?'月明かりで淡い星は見えにくい時間です。':'');}
+  else s+=`月は沈んでいて、暗い空です。`;
+  $('#lead').textContent=s;
+
+  // 数値
+  const e=evening(v,obs,dateStr);
+  const facts=[['日の入り',hmLabel(e.sunset,dateStr)],['空が暗くなる',hmLabel(e.dark,dateStr)],['月齢',age!=null?age.toFixed(1):'—'],
+    ['月の出',hmLabel(e.mrise,dateStr)],['月の入り',hmLabel(e.mset,dateStr)],['見える星',lim<1?'明るい星だけ':`${lim.toFixed(1)}等星まで`]];
+  $('#facts').innerHTML=facts.map(([a,b])=>`<div><dt>${a}</dt><dd>${b}</dd></div>`).join('');
+
+  // 惑星と月のリスト
+  const rows=[{n:'月',c:'#EDE6C8',alt:moon.alt,az:moon.az,mag:null,extra:`輝いている部分 ${Math.round(moon.ill*100)}%`},...planets.map(p=>({...p,extra:`${p.mag.toFixed(1)}等`}))];
+  const rank={ok:0,low:1,faint:2,hidden:3,below:4};
+  rows.forEach(r=>r.st=status(r.alt,r.az,obst,r.mag,lim));
+  rows.sort((a,b)=>rank[a.st[1]]-rank[b.st[1]]||b.alt-a.alt);
+  $('#plist').innerHTML=rows.map(r=>`<li data-az="${r.az}" data-alt="${r.alt}"><span class="dot" style="background:${r.c}"></span><span class="nm">${r.n}</span><span class="chip ${r.st[1]}">${r.st[0]}</span><span class="pos">${r.alt>=0?`${dirName(r.az)}・高さ${Math.round(r.alt)}°`:`${dirName(r.az)}の地平線の下`}・${r.extra}</span></li>`).join('');
+
+  // 星座のリスト
+  const up=cons.filter(c=>c.up+c.hidden>0).sort((a,b)=>b.alt-a.alt);
+  $('#clist').innerHTML=up.length?up.map(c=>{
+    let st;if(c.up===c.total)st=c.alt<15?['低いが見える','low']:['全体が見える','ok'];
+    else if(c.up===0)st=c.hidden>0?['障害物の陰','hidden']:['地平線の下','below'];
+    else st=c.hidden>0?['一部が障害物の陰','hidden']:['一部が地平線の下','low'];
+    return `<li data-az="${c.az}" data-alt="${c.alt}"><span></span><span class="nm">${c.n}</span><span class="chip ${st[1]}">${st[0]}</span><span class="pos">${dirName(c.az)}・高さ${Math.round(c.alt)}°</span>${c.note?`<span class="note">${c.note}</span>`:''}</li>`;}).join('')
+    :'<li><span></span><span class="pos">この時刻に地平線より上の星座はありません。</span></li>';
+}
+
+/* ===== UI ===== */
+function renderVenues(){
+  $('#venues').innerHTML=S.venues.map(v=>`<button data-id="${v.id}" aria-pressed="${v.id===(curVenue()||{}).id}">${v.name}</button>`).join('');
+  const v=curVenue();
+  $('#vname').textContent=v?v.name:'';
+  $('#vcoords').textContent=v?`北緯 ${v.lat.toFixed(4)}°　東経 ${v.lon.toFixed(4)}°`:'';
+  $('#vlist').innerHTML=S.venues.map(v=>`<li><span>${v.name}<small>${v.lat.toFixed(5)}, ${v.lon.toFixed(5)}</small></span><button data-del="${v.id}">削除</button></li>`).join('');
+  renderObst();
+}
+function renderObst(){
+  const v=curVenue();if(!v){$('#obst').innerHTML='';return;}
+  const arr=obstOf(v);
+  $('#obst').innerHTML=DIRS8.map((d,i)=>`<label for="ob${i}">${d}</label><input type="range" id="ob${i}" data-i="${i}" min="0" max="45" step="1" value="${arr[i]}"><output id="obo${i}">${arr[i]}°</output>`).join('');
+}
+$('#venues').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.selected=b.dataset.id;save();renderVenues();render();scrollToAz(180,false);});
+$('#obst').addEventListener('input',e=>{const i=+e.target.dataset.i;if(isNaN(i))return;const v=curVenue();const arr=obstOf(v).slice();arr[i]=+e.target.value;S.obstacles[v.id]=arr;$('#obo'+i).textContent=arr[i]+'°';save();render();});
+$('#vlist').addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;
+  if(b.dataset.armed){const id=b.dataset.del;S.venues=S.venues.filter(v=>v.id!==id);delete S.obstacles[id];if(S.selected===id)S.selected=S.venues[0]?S.venues[0].id:null;save();renderVenues();render();return;}
+  b.dataset.armed='1';b.classList.add('armed');b.textContent='本当に削除';
+  setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.classList.remove('armed');b.textContent='削除';}},4000);});
+$('#addbtn').addEventListener('click',()=>{
+  const name=$('#newname').value.trim(),m=$('#newcoords').value.match(/(-?\d+(?:\.\d+)?)\s*[,，、\s]\s*(-?\d+(?:\.\d+)?)/);
+  if(!name){$('#addmsg').textContent='会場名を入れてください。';return;}
+  if(!m){$('#addmsg').textContent='緯度と経度を「26.08, 127.68」の形で入れてください。';return;}
+  const lat=+m[1],lon=+m[2];if(Math.abs(lat)>90||Math.abs(lon)>180){$('#addmsg').textContent='緯度は±90、経度は±180の範囲で入れてください。';return;}
+  const id='v'+Date.now().toString(36);S.venues.push({id,name,lat,lon});S.selected=id;save();
+  $('#newname').value='';$('#newcoords').value='';$('#addmsg').textContent='';renderVenues();render();});
+$('#date').addEventListener('change',render);
+$('#time').addEventListener('input',render);
+const pano=$('#pano');
+function scrollToAz(az,smooth=true){pano.scrollTo({left:xOf(az)-pano.clientWidth/2,behavior:smooth&&!matchMedia('(prefers-reduced-motion: reduce)').matches?'smooth':'auto'});}
+document.querySelector('.dirbtns').addEventListener('click',e=>{const b=e.target.closest('button');if(b)scrollToAz(+b.dataset.az);});
+function onRow(e){const li=e.target.closest('li[data-az]');if(!li)return;const az=+li.dataset.az,alt=+li.dataset.alt;
+  flash={az,alt,t0:Date.now()};scrollToAz(az);pano.scrollIntoView({behavior:'smooth',block:'center'});if(lastD)draw(lastD);setTimeout(()=>{if(lastD)draw(lastD);},1900);}
+$('#plist').addEventListener('click',onRow);$('#clist').addEventListener('click',onRow);
+$('#redbtn').addEventListener('click',()=>{S.red=!S.red;save();applyRed();});
+function applyRed(){document.body.classList.toggle('red',!!S.red);$('#redbtn').setAttribute('aria-pressed',String(!!S.red));}
+
+/* ===== 空にかざすモード ===== */
+const DECL=-4.5; // 沖縄付近の磁気偏角（西偏 約4.5°）
+const AR={on:false,mode:'drag',sensorOK:false,got:false,a:0,b:90,g:0,tA:0,tB:90,tG:0,off:0,vAz:180,vAlt:25,w:0,h:0,f:1,lastRead:''};
+let calib=null,drag=null;
+const arEl=$('#ar'),arc=$('#arsky'),actx=arc.getContext('2d');
+const angDiff=(a,b)=>((a-b+540)%360)-180;
+const HILL=()=>getComputedStyle(document.documentElement).getPropertyValue('--hill').trim()||'#130F1D';
+const arMsg=t=>{$('#armsg').textContent=t;};
+function arSize(){const dpr=Math.min(window.devicePixelRatio||1,3);AR.w=window.innerWidth;AR.h=window.innerHeight;arc.width=AR.w*dpr;arc.height=AR.h*dpr;arc.style.width=AR.w+'px';arc.style.height=AR.h+'px';actx.setTransform(dpr,0,0,dpr,0,0);AR.f=(Math.max(AR.w,AR.h)/2)/Math.tan(33*rad);}
+function screenAngle(){return screen.orientation&&typeof screen.orientation.angle==='number'?screen.orientation.angle:(window.orientation||0);}
+function onOri(e){
+  if(e.alpha==null||e.beta==null)return;
+  const hd=e.webkitCompassHeading;
+  if(typeof hd==='number'&&!isNaN(hd)&&hd>=0){const off=angDiff(norm(360-(hd+DECL)),e.alpha);
+    if(calib===null)calib=off;else if(Math.abs(e.beta)<45)calib=norm(calib+angDiff(off,calib)*0.15);}
+  else if(calib===null)calib=0;
+  AR.tA=norm(e.alpha+calib);AR.tB=e.beta;AR.tG=e.gamma;
+  if(!AR.got){AR.got=true;AR.a=AR.tA;AR.b=AR.tB;AR.g=AR.tG;
+    if(AR.sensorOK){AR.mode='sensor';arMsg('空にかざすと、その方向の星が出ます。方角がずれているときは、指で左右になぞって合わせられます。');updModeBtn();}}
+}
+function arMatrix(){let a,b,g;
+  if(AR.mode==='sensor'){a=(AR.a-AR.off)*rad;b=AR.b*rad;g=AR.g*rad;}else{a=-AR.vAz*rad;b=(90+AR.vAlt)*rad;g=0;}
+  const cA=Math.cos(a),sA=Math.sin(a),cB=Math.cos(b),sB=Math.sin(b),cG=Math.cos(g),sG=Math.sin(g);
+  return[[cA*cG-sA*sB*sG,-sA*cB,cA*sG+sA*sB*cG],[sA*cG+cA*sB*sG,cA*cB,sA*sG-cA*sB*cG],[-cB*sG,sB,cB*cG]];}
+function arCenter(){const M=arMatrix();return{alt:Math.asin(clamp(-M[2][2],-1,1))/rad,az:norm(Math.atan2(-M[0][2],-M[1][2])/rad)};}
+function arDraw(){
+  const c=actx,w=AR.w,h=AR.h,D=lastD;
+  if(!D){c.fillStyle='#060B22';c.fillRect(0,0,w,h);return;}
+  const M=arMatrix(),ang=AR.mode==='sensor'?screenAngle()*rad:0,co=Math.cos(ang),si=Math.sin(ang),f=AR.f;
+  const P=(alt,az)=>{const ca=Math.cos(alt*rad),e0=ca*Math.sin(az*rad),e1=ca*Math.cos(az*rad),e2=Math.sin(alt*rad);
+    const dx=M[0][0]*e0+M[1][0]*e1+M[2][0]*e2,dy=M[0][1]*e0+M[1][1]*e1+M[2][1]*e2,dz=M[0][2]*e0+M[1][2]*e1+M[2][2]*e2;
+    if(dz>-0.08)return null;const sx=dx*co-dy*si,sy=dx*si+dy*co;return[w/2+f*sx/(-dz),h/2-f*sy/(-dz)];};
+  const vis=p=>p&&p[0]>-80&&p[0]<w+80&&p[1]>-80&&p[1]<h+80;
+  const {pos,sun,moon,planets,obst,lim,cons}=D,dark=clamp((-sun.alt-4)/14,0,1),[top,hor]=skyColors(sun.alt),hill=HILL();
+  c.fillStyle=top;c.fillRect(0,0,w,h);
+  const ring=(alt,step)=>{c.beginPath();let pen=false;for(let az=0;az<=360;az+=step){const p=P(alt,az);if(p){pen?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]);pen=true;}else pen=false;}c.stroke();};
+  c.save();c.strokeStyle=hor;c.globalAlpha=.5;c.lineWidth=f*0.16;c.lineCap='round';ring(4,3);c.restore();
+  c.strokeStyle='rgba(190,205,245,.14)';c.lineWidth=1;c.setLineDash([3,6]);ring(30,3);ring(60,3);c.setLineDash([]);
+  // 星座線
+  c.strokeStyle=`rgba(150,175,235,${0.2+0.35*dark})`;c.lineWidth=1.2;
+  for(const k of cons)for(const [a,b] of k.l){const A=pos[a],B=pos[b];if(A.alt<-5&&B.alt<-5)continue;const p1=P(A.alt,A.az),p2=P(B.alt,B.az);if(!p1||!p2||(!vis(p1)&&!vis(p2)))continue;c.beginPath();c.moveTo(p1[0],p1[1]);c.lineTo(p2[0],p2[1]);c.stroke();}
+  // 恒星
+  c.font='12px "Zen Kaku Gothic New",sans-serif';
+  for(const id in STARS){const s=STARS[id],q=pos[id];if(q.alt<-3||s[2]>lim+0.4)continue;const p=P(q.alt,q.az);if(!vis(p))continue;
+    const a=clamp((lim+0.4-s[2])/1.2,0.15,1),r=Math.max(1,3.6-0.6*s[2]);c.fillStyle=`rgba(245,243,232,${a})`;c.beginPath();c.arc(p[0],p[1],r,0,Math.PI*2);c.fill();
+    if(s[3]&&s[2]<=lim){c.fillStyle=`rgba(236,231,214,${0.6*a})`;c.fillText(s[3],p[0]+r+5,p[1]+4);}}
+  // 星座名
+  c.font='14px "Zen Kaku Gothic New",sans-serif';c.textAlign='center';c.fillStyle=`rgba(160,185,240,${0.4+0.4*dark})`;
+  for(const k of cons){if(k.single||k.alt<-2)continue;const p=P(k.alt,k.az);if(vis(p))c.fillText(k.short,p[0],p[1]+22);}
+  c.textAlign='left';
+  // 惑星と月
+  c.font='700 15px "Zen Kaku Gothic New",sans-serif';
+  for(const pl of planets){if(pl.alt<-3)continue;const p=P(pl.alt,pl.az);if(!vis(p))continue;c.save();c.shadowColor=pl.c;c.shadowBlur=12;c.fillStyle=pl.c;c.beginPath();c.arc(p[0],p[1],5,0,Math.PI*2);c.fill();c.restore();c.fillStyle=pl.c;c.fillText(pl.n,p[0]+10,p[1]-8);}
+  if(moon.alt>-3){const p=P(moon.alt,moon.az);if(vis(p)){drawMoon(p[0],p[1],13,moon.phase,c);c.fillStyle='#EDE6C8';c.fillText('月',p[0]+17,p[1]-10);}}
+  // 地面と障害物
+  c.fillStyle=hill;c.strokeStyle=hill;c.lineWidth=1.5;
+  const bands=[-15,-40,-65,-89];
+  for(let az=0;az<360;az+=4){let u1=Math.max(0,horizonAlt(az,obst)),u2=Math.max(0,horizonAlt(az+4,obst));
+    for(const b of bands){const q=[P(u1,az),P(u2,az+4),P(b,az+4),P(b,az)];u1=b;u2=b;if(q.some(x=>!x))continue;
+      c.beginPath();c.moveTo(q[0][0],q[0][1]);for(let i=1;i<4;i++)c.lineTo(q[i][0],q[i][1]);c.closePath();c.fill();c.stroke();}}
+  c.strokeStyle='rgba(150,140,180,.5)';c.lineWidth=1;c.beginPath();{let pen=false;for(let az=0;az<=360;az+=2){const p=P(Math.max(0,horizonAlt(az,obst)),az);if(p){pen?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]);pen=true;}else pen=false;}}c.stroke();
+  // 障害物の陰の惑星・月
+  c.setLineDash([3,3]);c.lineWidth=1.4;c.font='13px "Zen Kaku Gothic New",sans-serif';
+  for(const o of [...planets,{n:'月',c:'#EDE6C8',alt:moon.alt,az:moon.az}]){if(o.alt<0||o.alt>=horizonAlt(o.az,obst))continue;const p=P(o.alt,o.az);if(!vis(p))continue;c.strokeStyle=o.c;c.beginPath();c.arc(p[0],p[1],9,0,Math.PI*2);c.stroke();c.fillStyle=o.c;c.fillText(o.n+'（陰）',p[0]+13,p[1]+5);}
+  c.setLineDash([]);
+  // 方角
+  c.textAlign='center';
+  for(let i=0;i<16;i++){const p=P(-4,i*22.5);if(!vis(p))continue;const main=i%2===0;c.font=main?'700 17px "Zen Kaku Gothic New",sans-serif':'12px "Zen Kaku Gothic New",sans-serif';c.fillStyle=main?'#D9D3C2':'rgba(201,195,178,.6)';c.fillText(DIRS16[i],p[0],p[1]);}
+  c.textAlign='left';
+  // 中心の照準
+  c.strokeStyle='rgba(240,190,98,.7)';c.lineWidth=1.5;c.beginPath();c.arc(w/2,h/2,14,0,Math.PI*2);c.moveTo(w/2-22,h/2);c.lineTo(w/2-16,h/2);c.moveTo(w/2+16,h/2);c.lineTo(w/2+22,h/2);c.stroke();
+  const cc=arCenter(),ob=horizonAlt(cc.az,obst);
+  const t=`${dirName(cc.az)}・高さ${Math.round(cc.alt)}°`+(ob>=1?`（障害物 ${Math.round(ob)}°）`:'');
+  if(t!==AR.lastRead){AR.lastRead=t;$('#arread').textContent=t;}
+  const showOff=AR.mode==='sensor'&&Math.abs(AR.off)>0.5,bo=$('#aroff');if(bo.hidden===showOff)bo.hidden=!showOff;
+}
+function arTick(){
+  if(!AR.on)return;
+  if(AR.mode==='sensor'){AR.a=norm(AR.a+angDiff(AR.tA,AR.a)*0.25);AR.b=angDiff(AR.b+angDiff(AR.tB,AR.b)*0.25,0);AR.g=AR.g+(AR.tG-AR.g)*0.25;}
+  arDraw();requestAnimationFrame(arTick);
+}
+function updModeBtn(){const b=$('#armode');if(AR.mode==='sensor'){b.hidden=false;b.textContent='指で動かす';}else if(AR.got){b.hidden=false;b.textContent='センサーで動かす';}else b.hidden=true;}
+$('#armode').addEventListener('click',()=>{
+  if(AR.mode==='sensor'){const cc=arCenter();AR.vAz=cc.az;AR.vAlt=clamp(cc.alt,-30,90);AR.mode='drag';arMsg('指でなぞって空を見回せます。');}
+  else{AR.mode='sensor';arMsg('空にかざすと、その方向の星が出ます。');}
+  updModeBtn();});
+$('#aroff').addEventListener('click',()=>{AR.off=0;});
+arc.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};try{arc.setPointerCapture(e.pointerId);}catch(err){}});
+arc.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag={x:e.clientX,y:e.clientY};const dpp=(180/Math.PI)/AR.f;
+  if(AR.mode==='sensor')AR.off-=dx*dpp;else{AR.vAz=norm(AR.vAz-dx*dpp);AR.vAlt=clamp(AR.vAlt+dy*dpp,-30,90);}});
+arc.addEventListener('pointerup',()=>{drag=null;});arc.addEventListener('pointercancel',()=>{drag=null;});
+$('#arbtn').addEventListener('click',async()=>{
+  AR.sensorOK=false;AR.got=false;calib=null;AR.off=0;AR.mode='drag';AR.vAz=180;AR.vAlt=25;AR.lastRead='';
+  arEl.hidden=false;AR.on=true;document.body.style.overflow='hidden';arSize();
+  $('#arvenue').textContent=(curVenue()||{}).name||'';$('#artime').textContent=$('#date').value.replace(/-/g,'/')+' '+$('#timelabel').textContent+' の空';
+  arMsg('準備しています…');updModeBtn();requestAnimationFrame(arTick);
+  let ok=false;
+  try{if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){ok=(await DeviceOrientationEvent.requestPermission())==='granted';}else ok=typeof DeviceOrientationEvent!=='undefined';}catch(err){ok=false;}
+  if(ok){AR.sensorOK=true;window.addEventListener('deviceorientation',onOri);arMsg('スマホを一度水平に持ってから、ゆっくり空にかざしてください。');}
+  setTimeout(()=>{if(AR.on&&!AR.got)arMsg('向きのセンサーが使えないため、指でなぞって見回すモードにしています。');},2000);
+});
+$('#arclose').addEventListener('click',()=>{AR.on=false;arEl.hidden=true;document.body.style.overflow='';window.removeEventListener('deviceorientation',onOri);});
+window.addEventListener('resize',()=>{if(AR.on)arSize();});
+
+/* ===== 起動 ===== */
+$('#date').value=fmtDate(new Date());
+applyRed();
+if(typeof Astronomy==='undefined'){
+  $('#errbox').innerHTML='<div class="err">星の位置を計算する部品を読み込めませんでした。電波のある場所でページを開き直してください。</div>';
+  renderVenues();
+}else{
+  renderVenues();render();
+  requestAnimationFrame(()=>scrollToAz(180,false));
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{if(lastD)draw(lastD);});
+}
+</script>
+</body>
+</html>
