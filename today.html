@@ -47,6 +47,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 
 .dayrow { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; }
 .day { flex: 1; }
+.dayrow { margin-bottom: 16px; }
 .day h1 { font-family: var(--mincho); font-weight: 700; font-size: 34px; line-height: 1.2; margin: 0; letter-spacing: .02em; }
 .day h1 small { font-size: 15px; font-weight: 500; color: var(--dim); margin-left: 4px; letter-spacing: 0; }
 .navbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--rim); background: transparent; font-size: 20px; line-height: 1; }
@@ -116,7 +117,13 @@ h2 { font-family: var(--mincho); font-weight: 700; font-size: 19px; margin: 0 0 
 
 #more, #sats { list-style: none; margin: 0; padding: 0; }
 #more li + li, #sats li + li { border-top: 1px solid #263064; }
-#sats li.none { padding: 6px 0; color: var(--dim); font-size: 14px; }
+#more li.none, #sats li.none { padding: 6px 0; color: var(--dim); font-size: 14px; }
+#phases { list-style: none; margin: 0; padding: 0; }
+#phases li { display: grid; grid-template-columns: 34px 3.2em 1fr auto; gap: 10px; align-items: center; padding: 6px 0; }
+#phases li + li { border-top: 1px solid #263064; }
+#phases .pn { font-weight: 500; }
+#phases .pd { font-size: 15px; }
+#phases .pr { font-size: 13px; color: var(--dim); }
 .satStatus { margin: 8px 0 0; font-size: 12px; color: var(--faint); }
 .hl { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 12px 0; }
 .hl:disabled { cursor: default; opacity: 1; }
@@ -161,8 +168,6 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
     <button class="navbtn" id="next" aria-label="次の日">›</button>
   </div>
 
-  <p class="lead" id="lead"></p>
-  <p class="leadSub" id="leadSub"></p>
 
   <div id="chartBox">
     <svg id="chart" role="img" aria-label="星図"></svg>
@@ -188,8 +193,13 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
   </div>
 
   <section id="moreWrap">
-    <h2>ほかの見どころ</h2>
+    <h2>見どころ</h2>
     <ul id="more"></ul>
+  </section>
+
+  <section>
+    <h2>空の時刻</h2>
+    <dl id="times"></dl>
   </section>
 
   <section>
@@ -216,14 +226,11 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
   </section>
 
   <section>
-    <h2>空の時刻</h2>
-    <dl id="times"></dl>
+    <h2>月の満ち欠け</h2>
+    <ul id="phases"></ul>
   </section>
 
-  <section>
-    <h2>夕方、高く見える星座</h2>
-    <p class="consts" id="consts"></p>
-  </section>
+
 
   <footer>
     <div class="frow">
@@ -261,7 +268,7 @@ const Sky = (() => {
   const EPS0 = 23.4392911;
 
   const jdOf = t => t / 86400000 + 2440587.5;          // t: ms (UTC)
-  const Tc = t => (jdOf(t) - 2451545.0) / 36525;
+  const Tc = t => (jdOf(t) + 69.184 / 86400 - 2451545.0) / 36525;   // 地球時（TT = UTC + 69.184秒）
 
   // --- 惑星の軌道要素（JPL 近似要素 1800–2050） ---
   const EL = {
@@ -675,6 +682,61 @@ const Midokoro = (() => {
   return { analyze, handWord, moonInfo, NAMED, CLUSTERS, PLANETS, PNAME, CONST_JA, hm, dirName, jstParts };
 })();
 if (typeof module !== 'undefined') module.exports = Midokoro;
+
+</script>
+<script>
+// Meeus 49章「月の位相」
+const MoonPhase = (() => {
+  const r = Math.PI / 180, s = x => Math.sin(x * r), c = x => Math.cos(x * r);
+  const SMALL = [[-0.00007,'Mp+2M'],[0.00004,'2Mp-2F'],[0.00004,'3M'],[0.00003,'Mp+M-2F'],[0.00003,'2Mp+2F'],[-0.00003,'Mp+M+2F'],[0.00003,'Mp-M+2F'],[-0.00002,'Mp-M-2F'],[-0.00002,'3Mp+M'],[0.00002,'4Mp']];
+  function jde(k) {      // k: 整数=新月, +0.25 上弦, +0.5 満月, +0.75 下弦
+    const T = k / 1236.85, T2 = T * T, T3 = T2 * T, T4 = T3 * T;
+    let J = 2451550.09766 + 29.530588861 * k + 0.00015437 * T2 - 0.000000150 * T3 + 0.00000000073 * T4;
+    const E = 1 - 0.002516 * T - 0.0000074 * T2;
+    const M = 2.5534 + 29.10535670 * k - 0.0000014 * T2 - 0.00000011 * T3;
+    const Mp = 201.5643 + 385.81693528 * k + 0.0107582 * T2 + 0.00001238 * T3 - 0.000000058 * T4;
+    const F = 160.7108 + 390.67050284 * k - 0.0016118 * T2 - 0.00000227 * T3 + 0.000000011 * T4;
+    const Om = 124.7746 - 1.56375588 * k + 0.0020672 * T2 + 0.00000215 * T3;
+    const ph = Math.round((k - Math.floor(k)) * 4) % 4;
+    let d = 0;
+    if (ph === 0 || ph === 2) {
+      const nw = ph === 0;
+      d = (nw ? -0.40720 : -0.40614) * s(Mp) + (nw ? 0.17241 : 0.17302) * E * s(M) + (nw ? 0.01608 : 0.01614) * s(2 * Mp)
+        + (nw ? 0.01039 : 0.01043) * s(2 * F) + (nw ? 0.00739 : 0.00734) * E * s(Mp - M) - (nw ? 0.00514 : 0.00515) * E * s(Mp + M)
+        + (nw ? 0.00208 : 0.00209) * E * E * s(2 * M) - 0.00111 * s(Mp - 2 * F) - 0.00057 * s(Mp + 2 * F) + 0.00056 * E * s(2 * Mp + M)
+        - 0.00042 * s(3 * Mp) + 0.00042 * E * s(M + 2 * F) + 0.00038 * E * s(M - 2 * F) - 0.00024 * E * s(2 * Mp - M) - 0.00017 * s(Om)
+        - 0.00007 * s(Mp + 2 * M) + 0.00004 * s(2 * Mp - 2 * F) + 0.00004 * s(3 * M) + 0.00003 * s(Mp + M - 2 * F) + 0.00003 * s(2 * Mp + 2 * F)
+        - 0.00003 * s(Mp + M + 2 * F) + 0.00003 * s(Mp - M + 2 * F) - 0.00002 * s(Mp - M - 2 * F) - 0.00002 * s(3 * Mp + M) + 0.00002 * s(4 * Mp);
+    } else {
+      d = -0.62801 * s(Mp) + 0.17172 * E * s(M) - 0.01183 * E * s(Mp + M) + 0.00862 * s(2 * Mp) + 0.00804 * s(2 * F)
+        + 0.00454 * E * s(Mp - M) + 0.00204 * E * E * s(2 * M) - 0.00180 * s(Mp - 2 * F) - 0.00070 * s(Mp + 2 * F) - 0.00040 * s(3 * Mp)
+        - 0.00034 * E * s(2 * Mp - M) + 0.00032 * E * s(M + 2 * F) + 0.00032 * E * s(M - 2 * F) - 0.00028 * E * E * s(Mp + 2 * M)
+        + 0.00027 * E * s(2 * Mp + M) - 0.00017 * s(Om) - 0.00005 * s(Mp - M - 2 * F) + 0.00004 * s(2 * Mp + 2 * F)
+        - 0.00004 * s(Mp + M + 2 * F) + 0.00004 * s(Mp - 2 * M) + 0.00003 * s(Mp + M - 2 * F) + 0.00003 * s(3 * M)
+        + 0.00002 * s(2 * Mp - 2 * F) + 0.00002 * s(Mp - M + 2 * F) - 0.00002 * s(3 * Mp + M);
+      const W = 0.00306 - 0.00038 * E * c(M) + 0.00026 * c(Mp) - 0.00002 * c(Mp - M) + 0.00002 * c(Mp + M) + 0.00002 * c(2 * F);
+      d += ph === 1 ? W : -W;
+    }
+    const A = [[299.77, 0.107408, 0.000325], [251.88, 0.016321, 0.000165], [251.83, 26.651886, 0.000164], [349.42, 36.412478, 0.000126],
+      [84.66, 18.206239, 0.000110], [141.74, 53.303771, 0.000062], [207.14, 2.453732, 0.000060], [154.84, 7.306860, 0.000056],
+      [34.52, 27.261239, 0.000047], [207.19, 0.121824, 0.000042], [291.34, 1.844379, 0.000040], [161.72, 24.198154, 0.000037],
+      [239.56, 25.513099, 0.000035], [331.55, 3.592518, 0.000023]];
+    let add = 0;
+    A.forEach(([a0, a1, co], i) => { add += co * s(a0 + a1 * k - (i === 0 ? 0.009173 * T2 : 0)); });
+    return J + d + add;
+  }
+  const DELTA_T = 69.184;   // 地球時と協定世界時の差（秒）
+  function timeMs(k) { return (jde(k) - 2440587.5) * 86400000 - DELTA_T * 1000; }
+  // t 以降で最初の、指定した位相（0 新月, 1 上弦, 2 満月, 3 下弦）の時刻
+  function next(phase, t) {
+    const year = 1970 + t / (365.2425 * 86400000);
+    let k = Math.floor((year - 2000) * 12.3685) - 2 + phase / 4;
+    while (timeMs(k) < t) k += 1;
+    return timeMs(k);
+  }
+  return { jde, timeMs, next };
+})();
+if (typeof module !== 'undefined') module.exports = MoonPhase;
 
 </script>
 <script>
@@ -1454,18 +1516,13 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('todayBtn').hidden = isToday;
     $('place').textContent = obs.name;
 
-    const top = r.highlights[0];
-    const planetsUp = r.planets.filter(p => p.status === 'evening' && !p.faint);
-    $('lead').innerHTML = phrase(top ? top.title : planetsUp.length ? `夕方の空に${planetsUp.map(p => p.name).join('と')}` : `今夜は${r.moon.name}`);
-    $('leadSub').textContent = top ? top.detail : '大きな出来事のない、ふだんの星空です。';
-
-    // ほかの見どころ
-    const rest = r.highlights.slice(1);
-    $('moreWrap').hidden = rest.length === 0;
-    $('more').innerHTML = rest.map((h, i) => `
-      <li><button class="hl" data-i="${i + 1}" ${h.focus || h.sat ? '' : 'disabled'}>
+    // 見どころ（星図の下に一覧で）
+    const hs = r.highlights;
+    $('more').innerHTML = hs.length ? hs.map((h, i) => `
+      <li><button class="hl" data-i="${i}" ${h.focus || h.sat ? '' : 'disabled'}>
         <span class="hl-t">${phrase(h.title)}</span><span class="hl-d">${esc(h.detail)}</span>
-        ${h.focus || h.sat ? '<span class="hl-go">星図で見る</span>' : ''}</button></li>`).join('');
+        ${h.focus || h.sat ? '<span class="hl-go">星図で見る</span>' : ''}</button></li>`).join('')
+      : '<li class="none">大きな出来事のない、ふだんの星空です。</li>';
 
     // 月
     const m = r.moon;
@@ -1478,6 +1535,18 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('moonTimes').textContent = ev.join('　');
 
     // 惑星
+    // 月の満ち欠け（選んだ日の0時以降で次に来るもの）
+    const day0 = Date.UTC(ymd[0], ymd[1] - 1, ymd[2]) - 9 * H;
+    // 時刻は Meeus の月相計算（国立天文台の暦要項と分単位でほぼ一致）
+    $('phases').innerHTML = [['新月', 0], ['上弦', 90], ['満月', 180], ['下弦', 270]].map(([n, a], i) => {
+      const t = Math.round(MoonPhase.next(i, day0) / MIN) * MIN, p = M.jstParts(t);   // 国立天文台と同じく分に四捨五入
+      const wd = WD[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()];
+      const days = Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(ymd[0], ymd[1] - 1, ymd[2])) / DAY);
+      const rel = days === 0 ? (isToday ? '今日' : 'この日') : `${days}日後`;
+      return `<li><svg viewBox="-15 -15 30 30" width="30" height="30" aria-hidden="true"><circle r="13" fill="none" stroke="var(--rim)" stroke-width="1"/>${moonSvg(0, 0, 12, a === 0 ? 0.1 : a > 180 ? 360 - a : a, a > 180 ? 180 : 0)}</svg>
+        <span class="pn">${n}</span><span class="pd">${p.m}月${p.d}日（${wd}）${M.hm(t)}</span><span class="pr">${rel}</span></li>`;
+    }).join('');
+
     $('planets').innerHTML = r.planets.map(p => `
       <li class="${p.status === 'none' ? 'off' : ''}${p.faint ? ' faint' : ''}">
         <span class="dot" style="background:${p.color}"></span>
@@ -1489,13 +1558,13 @@ if (typeof module !== 'undefined') module.exports = Sat;
       ['日の入り', r.sunset], ['暗くなる（薄明の終わり）', r.dark], ['明るくなりはじめ', r.dawn], ['日の出', r.sunrise],
     ].map(([k, t]) => `<div><dt>${k}</dt><dd>${t ? M.hm(t) : '—'}</dd></div>`).join('');
 
-    $('consts').textContent = r.constellations.slice(0, 6).map(c => c.name).join('、') || '—';
 
     // 星図
-    focus = makeFocus(top);
+    // 開いたときは、日の入り1時間後の空全体
+    focus = null;
     manual = null;
-    mode = focus ? 'dir' : 'all';
-    viewT = focus ? focus.t : r.evening;
+    mode = 'all';
+    viewT = r.evening;
     const slider = $('slider');
     slider.min = 0; slider.max = Math.round((r.sunrise - r.sunset) / MIN); slider.step = 10;
     slider.value = Math.round((viewT - r.sunset) / MIN);
