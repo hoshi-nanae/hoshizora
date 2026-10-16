@@ -49,9 +49,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .day h1 small { font-size: 15px; font-weight: 500; color: var(--dim); margin-left: 4px; letter-spacing: 0; }
 .navbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--rim); background: transparent; font-size: 20px; line-height: 1; }
 .navbtn:active { background: var(--panel); }
-#todayBtn { border: 1px solid var(--rim); background: transparent; border-radius: 22px; height: 36px; padding: 0 14px; font-size: 14px; }
+#todayBtn { border: 1px solid var(--rim); background: transparent; border-radius: 16px; height: 30px; padding: 0 12px; font-size: 13px; color: var(--gold); }
+.topright { display: inline-flex; align-items: center; gap: 10px; }
+.day h1 { white-space: nowrap; }
 
-.lead { font-family: var(--mincho); font-weight: 700; font-size: 26px; line-height: 1.45; margin: 22px 0 6px; color: var(--gold); text-wrap: balance; }
+.lead { font-family: var(--mincho); font-weight: 700; font-size: 26px; line-height: 1.45; margin: 22px 0 6px; color: var(--gold); }
+.ph { display: inline-block; }
 .leadSub { margin: 0 0 16px; color: var(--ink); font-size: 15px; }
 
 #chartBox { margin: 0 -18px; scroll-margin-top: env(safe-area-inset-top, 0px); }
@@ -78,6 +81,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #chart .sattime { fill: #cfeee2; font-size: 14px; font-weight: 500; font-family: var(--gothic); text-anchor: middle; }
 #chart .satarrow { fill: #9fe3c8; }
 .makeImg { margin-top: 10px; }
+.dirRow { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.dirRow[hidden] { display: none; }
+.dirRow + .dragHint { margin: 4px 0 0; font-size: 12px; color: var(--faint); }
+.dirRow[hidden] + .dragHint { display: none; }
+.dirRow button { flex: none; border: 1px solid var(--rim); background: transparent; border-radius: 16px; padding: 4px 11px; font-size: 13px; min-height: 32px; color: var(--dim); }
+.dirRow button[aria-pressed="true"] { background: var(--rim); color: var(--ink); }
+.dirRow .back { color: var(--gold); border-color: #6b6340; }
+#chart { cursor: grab; user-select: none; -webkit-user-select: none; }
 .modal { position: fixed; inset: 0; background: rgba(5, 8, 22, .82); display: flex; align-items: center; justify-content: center; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 20; }
 .modal[hidden] { display: none; }
 .sheet { background: var(--panel); border: 1px solid var(--rim); border-radius: 14px; padding: 14px; max-width: 640px; width: 100%; }
@@ -140,12 +151,11 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
 <main>
   <div class="top">
     <p class="brand">今日の星空</p>
-    <span class="place" id="place"></span>
+    <span class="topright"><button id="todayBtn" hidden>今日へ</button><span class="place" id="place"></span></span>
   </div>
   <div class="dayrow">
     <button class="navbtn" id="prev" aria-label="前の日">‹</button>
     <div class="day"><h1><span id="date"></span><small id="weekday"></small></h1></div>
-    <button id="todayBtn" hidden>今日へ</button>
     <button class="navbtn" id="next" aria-label="次の日">›</button>
   </div>
 
@@ -158,12 +168,18 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
       <div class="ctrlrow">
         <div><span class="tl" id="timeLabel"></span><span class="ts" id="timeSub"></span></div>
         <div class="seg" role="group" aria-label="星図の表示">
-          <button id="modeDir" aria-pressed="false">見どころの方向</button>
+          <button id="modeDir" aria-pressed="false">方角</button>
           <button id="modeEye" aria-pressed="false">肉眼の見え方</button>
           <button id="modeAll" aria-pressed="false">空全体</button>
         </div>
       </div>
       <input type="range" id="slider" aria-label="時刻">
+      <div class="dirRow" id="dirRow" role="group" aria-label="方角">
+        <button id="backFocus" class="back">見どころへ戻る</button>
+        <button data-az="0">北</button><button data-az="45">北東</button><button data-az="90">東</button><button data-az="135">南東</button>
+        <button data-az="180">南</button><button data-az="225">南西</button><button data-az="270">西</button><button data-az="315">北西</button>
+      </div>
+      <p class="dragHint">星図を左右にドラッグしても方角を動かせます。</p>
       <p class="eyeNote" id="eyeNote" hidden></p>
       <button class="chip makeImg" id="makeImg">投稿用の画像を作る</button>
     </div>
@@ -902,6 +918,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
   const todayJst = () => { const p = M.jstParts(Date.now()); return [p.y, p.m, p.d]; };
   let ymd = todayJst();
   let report = null, viewT = 0, mode = 'all', focus = null;
+  let manual = null, curCenter = null;   // manual: 指で動かした向き（null なら見どころに合わせる）
   const WD = ['日', '月', '火', '水', '木', '金', '土'];
 
   // ---- 人工衛星 ----
@@ -1051,17 +1068,22 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const t = viewT, ctx = S.context(t, obs);
     let center = null, P;
     if (mode === 'eye') {
-      let mid = { alt: 30, az: 180 };
-      if (focus) { const a = focus.haAt(t), b = focus.hbAt(t); mid = towards(a, b, S.sep({ ra: a.az, dec: a.alt }, { ra: b.az, dec: b.alt }) / 2); }
-      center = { az: mid.az, alt: mid.alt < 27 ? 13 : mid.alt };   // 低いときは地平線が入るように
+      if (manual) center = { az: manual.az, alt: manual.alt != null ? manual.alt : 20 };
+      else {
+        let mid = { alt: 20, az: 180 };
+        if (focus) { const a = focus.haAt(t), b = focus.hbAt(t); mid = towards(a, b, S.sep({ ra: a.az, dec: a.alt }, { ra: b.az, dec: b.alt }) / 2); }
+        center = { az: mid.az, alt: mid.alt < 27 ? 13 : mid.alt };   // 低いときは地平線が入るように
+      }
       P = eyeProjector(center);
     } else {
-      if (mode === 'dir' && focus) {
-        const ha = focus.haAt(t);
-        center = { az: ha.az, top: Math.min(85, ha.alt + 30) };
+      if (mode === 'dir') {
+        if (manual) center = { az: manual.az, top: manual.top || 60 };
+        else if (focus) { const ha = focus.haAt(t); center = { az: ha.az, top: Math.min(85, ha.alt + 30) }; }
+        else center = { az: 180, top: 60 };
       }
-      P = projector(mode === 'dir' && center ? 'dir' : 'all', center);
+      P = projector(mode === 'dir' ? 'dir' : 'all', center);
     }
+    curCenter = center;
     const parts = [];
     const sunAlt = S.altOf('Sun', t, obs);
     const skyTone = sunAlt > -6 ? 'var(--sky-dusk)' : sunAlt > -12 ? 'var(--sky-twilight)' : 'var(--sky-night)';
@@ -1282,7 +1304,14 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('timeSub').textContent = `日の入りから${Math.floor(off / 60) ? Math.floor(off / 60) + '時間' : ''}${off % 60 ? (off % 60) + '分' : ''}後`;
     $('modeAll').setAttribute('aria-pressed', mode === 'all');
     $('modeDir').setAttribute('aria-pressed', mode === 'dir');
-    $('modeDir').disabled = !focus;
+    $('modeDir').disabled = false;
+    $('dirRow').hidden = mode === 'all';
+    $('backFocus').hidden = !(manual && focus);
+    document.querySelectorAll('#dirRow [data-az]').forEach(b => {
+      const on = curCenter && mode !== 'all' && Math.abs(((curCenter.az - Number(b.dataset.az) + 540) % 360) - 180) < 22.5;
+      b.setAttribute('aria-pressed', on);
+    });
+    $('chart').style.touchAction = mode === 'eye' ? 'none' : mode === 'dir' ? 'pan-y' : 'auto';
     $('modeEye').setAttribute('aria-pressed', mode === 'eye');
   }
 
@@ -1326,7 +1355,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('satStatus').textContent = msg;
     const hs = report.highlights.filter(h => h.type === 'sat').sort((a, b) => a.sat.start - b.sat.start);
     $('sats').innerHTML = hs.length ? hs.map(h => `<li><button class="hl" data-sat="${h.satIndex}">
-        <span class="hl-t">${esc(h.title)}</span><span class="hl-d">${esc(h.detail)}</span><span class="hl-go">星図で見る</span></button></li>`).join('')
+        <span class="hl-t">${phrase(h.title)}</span><span class="hl-d">${esc(h.detail)}</span><span class="hl-go">星図で見る</span></button></li>`).join('')
       : (st.tles && !satList.outOfRange ? '<li class="none">今夜、見やすい通過はありません。</li>' : '');
   }
 
@@ -1347,16 +1376,20 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const W = vb.width * scale, Hh = vb.height * scale;
     const clone = src.cloneNode(true);
     const a = src.querySelectorAll('*'), b = clone.querySelectorAll('*');
+    // 画像の文字は丸ゴシック（筑紫A丸ゴシックがあればそれ、なければヒラギノ丸ゴ）
+    const ROUND = "'Tsukushi A Round Gothic','筑紫A丸ゴシック','Hiragino Maru Gothic ProN','ヒラギノ丸ゴ ProN',sans-serif";
     a.forEach((el, i) => {
       const cs = getComputedStyle(el);
-      b[i].setAttribute('style', STYLE_PROPS.map(k => `${k}:${cs.getPropertyValue(k)}`).join(';'));
+      let st = STYLE_PROPS.map(k => `${k}:${cs.getPropertyValue(k)}`).join(';');
+      if (el.tagName === 'text') st += `;font-family:${ROUND}`;
+      b[i].setAttribute('style', st);
     });
     // 投稿用には高度の目安線を外してすっきりさせる
     clone.querySelectorAll('.altline, .altmark').forEach(el => el.remove());
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('width', W); clone.setAttribute('height', Hh);
     // 見出し（左上）
-    const tt = chartTitle(), font = "'Hiragino Mincho ProN','Yu Mincho',serif", gfont = "'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif";
+    const tt = chartTitle(), font = ROUND, gfont = ROUND;
     const head = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     head.innerHTML = `<text x="14" y="26" style="fill:#eee8d4;font-size:17px;font-family:${font};font-weight:700">${esc(tt.main)}</text>` +
       '';
@@ -1392,6 +1425,16 @@ if (typeof module !== 'undefined') module.exports = Sat;
   $('imgClose').onclick = () => { $('imgModal').hidden = true; };
   $('imgModal').onclick = e => { if (e.target === $('imgModal')) $('imgModal').hidden = true; };
 
+  // 見出しを言葉のまとまりで折り返す（「クレー／ター」のような途中改行を防ぐ）
+  function phrase(s) {
+    const chunks = [];
+    for (const part of String(s).split(/(（[^）]*）)/).filter(Boolean)) {
+      if (part.startsWith('（')) chunks.push(part);          // かっこ内はひとまとまり
+      else chunks.push(...part.split(/(?<=[。、]|が|と|に|は)(?=[^ぁ-ん])/).filter(Boolean));
+    }
+    return chunks.map(c => `<span class="ph">${esc(c)}</span>`).join('');
+  }
+
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   function run() {
@@ -1404,13 +1447,14 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const d = new Date(Date.UTC(ymd[0], ymd[1] - 1, ymd[2]));
     const isToday = todayJst().join() === ymd.join();
     $('date').textContent = `${ymd[1]}月${ymd[2]}日`;
-    $('weekday').textContent = `（${WD[d.getUTCDay()]}）${isToday ? '今日' : ymd[0] + '年'}`;
+    const thisYear = todayJst()[0] === ymd[0];
+    $('weekday').textContent = `（${WD[d.getUTCDay()]}）${isToday ? '今日' : thisYear ? '' : ymd[0] + '年'}`;
     $('todayBtn').hidden = isToday;
     $('place').textContent = obs.name;
 
     const top = r.highlights[0];
     const planetsUp = r.planets.filter(p => p.status === 'evening' && !p.faint);
-    $('lead').textContent = top ? top.title : planetsUp.length ? `夕方の空に${planetsUp.map(p => p.name).join('と')}` : `今夜は${r.moon.name}`;
+    $('lead').innerHTML = phrase(top ? top.title : planetsUp.length ? `夕方の空に${planetsUp.map(p => p.name).join('と')}` : `今夜は${r.moon.name}`);
     $('leadSub').textContent = top ? top.detail : '大きな出来事のない、ふだんの星空です。';
 
     // ほかの見どころ
@@ -1418,7 +1462,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('moreWrap').hidden = rest.length === 0;
     $('more').innerHTML = rest.map((h, i) => `
       <li><button class="hl" data-i="${i + 1}" ${h.focus || h.sat ? '' : 'disabled'}>
-        <span class="hl-t">${esc(h.title)}</span><span class="hl-d">${esc(h.detail)}</span>
+        <span class="hl-t">${phrase(h.title)}</span><span class="hl-d">${esc(h.detail)}</span>
         ${h.focus || h.sat ? '<span class="hl-go">星図で見る</span>' : ''}</button></li>`).join('');
 
     // 月
@@ -1447,6 +1491,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
 
     // 星図
     focus = makeFocus(top);
+    manual = null;
     mode = focus ? 'dir' : 'all';
     viewT = focus ? focus.t : r.evening;
     const slider = $('slider');
@@ -1462,7 +1507,42 @@ if (typeof module !== 'undefined') module.exports = Sat;
   $('slider').oninput = e => { viewT = report.sunset + Number(e.target.value) * MIN; drawChart(); };
   $('modeAll').onclick = () => { mode = 'all'; drawChart(); };
   $('modeEye').onclick = () => { mode = 'eye'; drawChart(); };
-  $('modeDir').onclick = () => { if (focus) { mode = 'dir'; drawChart(); } };
+  $('modeDir').onclick = () => { mode = 'dir'; drawChart(); };
+
+  // ---- 方角を自由に動かす ----
+  $('dirRow').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'backFocus') { manual = null; drawChart(); return; }
+    const az = Number(b.dataset.az);
+    manual = mode === 'eye' ? { az, alt: 20 } : { az, top: 60 };
+    drawChart();
+  };
+  let drag = null, raf = 0;
+  const svgEl = $('chart');
+  svgEl.addEventListener('pointerdown', e => {
+    if (mode === 'all' || !curCenter) return;
+    drag = { x: e.clientX, y: e.clientY, c: { ...curCenter }, id: e.pointerId, moved: false };
+  });
+  svgEl.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const k = 600 / svgEl.getBoundingClientRect().width;          // 画面の px → 星図の座標
+    const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (mode === 'dir' && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }   // 縦はページのスクロール
+      drag.moved = true;
+      try { svgEl.setPointerCapture(drag.id); } catch (er) { }
+    }
+    const degPerUnit = mode === 'eye' ? 45 / 600 : 96 / 600;
+    const az = (drag.c.az - dx * degPerUnit + 720) % 360;
+    manual = mode === 'eye'
+      ? { az, alt: Math.max(5, Math.min(85, drag.c.alt + dy * degPerUnit)) }
+      : { az, top: drag.c.top };
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawChart(); });
+  });
+  const endDrag = () => { drag = null; };
+  svgEl.addEventListener('pointerup', endDrag);
+  svgEl.addEventListener('pointercancel', endDrag);
   $('more').onclick = e => {
     const b = e.target.closest('.hl'); if (!b || b.disabled) return;
     showOnChart(report.highlights[Number(b.dataset.i)]);
@@ -1473,7 +1553,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
   };
   function showOnChart(h) {
     if (!h) return;
-    focus = makeFocus(h); if (mode !== 'eye') mode = 'dir'; viewT = focus.t;
+    focus = makeFocus(h); manual = null; if (mode !== 'eye') mode = 'dir'; viewT = focus.t;
     $('slider').value = Math.round((viewT - report.sunset) / MIN);
     drawChart();
     $('chartBox').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
