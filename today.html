@@ -48,6 +48,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .dayrow { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; }
 .day { flex: 1; }
 .dayrow { margin-bottom: 16px; }
+.day { position: relative; cursor: pointer; }
+.day .pick { font-size: 14px; color: var(--dim); margin-left: 6px; vertical-align: middle; }
+#datePick { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .day h1 { font-family: var(--mincho); font-weight: 700; font-size: 34px; line-height: 1.2; margin: 0; letter-spacing: .02em; }
 .day h1 small { font-size: 15px; font-weight: 500; color: var(--dim); margin-left: 4px; letter-spacing: 0; }
 .navbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--rim); background: transparent; font-size: 20px; line-height: 1; }
@@ -182,7 +185,8 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
   </div>
   <div class="dayrow">
     <button class="navbtn" id="prev" aria-label="前の日">‹</button>
-    <div class="day"><h1><span id="date"></span><small id="weekday"></small></h1></div>
+    <label class="day" title="日付を選ぶ"><h1><span id="date"></span><small id="weekday"></small><span class="pick" aria-hidden="true">▾</span></h1>
+      <input type="date" id="datePick" aria-label="日付を選ぶ"></label>
     <button class="navbtn" id="next" aria-label="次の日">›</button>
   </div>
 
@@ -1596,6 +1600,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const thisYear = todayJst()[0] === ymd[0];
     $('weekday').textContent = `（${WD[d.getUTCDay()]}）${isToday ? '今日' : thisYear ? '' : ymd[0] + '年'}`;
     $('todayBtn').hidden = isToday;
+    $('datePick').value = `${ymd[0]}-${String(ymd[1]).padStart(2, '0')}-${String(ymd[2]).padStart(2, '0')}`;
     $('place').textContent = obs.name;
 
     // 見どころ（星図の下に一覧で）
@@ -1656,6 +1661,12 @@ if (typeof module !== 'undefined') module.exports = Sat;
   // ---- 操作 ----
   $('prev').onclick = () => shiftDay(-1);
   $('next').onclick = () => shiftDay(1);
+  // 日付を選ぶ（日付の文字を押すとカレンダーが開く）
+  $('datePick').onchange = e => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value);
+    if (m) { ymd = [Number(m[1]), Number(m[2]), Number(m[3])]; run(); }
+  };
+  $('datePick').onclick = e => { try { e.target.showPicker && e.target.showPicker(); } catch (er) { } };
   $('todayBtn').onclick = () => { ymd = todayJst(); run(); };
   $('slider').oninput = e => { viewT = report.sunset + Number(e.target.value) * MIN; drawChart(); };
   $('modeAll').onclick = () => { mode = 'all'; drawChart(); };
@@ -1670,12 +1681,15 @@ if (typeof module !== 'undefined') module.exports = Sat;
     Ori: [81.0, 0.8],       // オリオン：三つ星（ミンタカ）の先
     Lyr: [286.0, 34.5],     // こと：平行四辺形の外
     Cnc: [134.0, 23.0],     // かに：四角の外
+    PsA: [335.7, -28.8],    // みなみのうお：フォーマルハウトの名前と重ならないよう上に
+    Boo: [223.4, 35.0],     // うしかい：ネクタイ形（五角形）の内側
   };
 
   // 星の名前の位置を個別に決める星（画面上のずらし幅）
   const STAR_LABEL = {
     カペラ: { dx: 6, dy: -13 },             // 少し上
     ベテルギウス: { dx: 0, dy: 18, mid: true }, // 星の真下
+    フォーマルハウト: { dx: 0, dy: 18, mid: true }, // 星の真下
   };
 
   // ---- 注目する星座 ----
