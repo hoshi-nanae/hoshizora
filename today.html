@@ -179,6 +179,7 @@ h2 { font-family: var(--mincho); font-weight: 700; font-size: 19px; margin: 0 0 
 
 dl#times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 0; }
 dl#times dt { font-size: 13px; color: var(--dim); }
+dl#times .noMoon { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--dim); }
 dl#times dd { margin: 0; font-family: var(--mincho); font-size: 22px; font-weight: 700; }
 
 .consts { margin: 0; }
@@ -559,7 +560,7 @@ const Midokoro = (() => {
     const d = new Date(t + 9 * H);
     return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes() };
   };
-  const hm = t => { const p = jstParts(t); return `${p.h}:${String(p.mi).padStart(2, '0')}`; };
+  const hm = t => { const p = jstParts(Math.round(t / 60000) * 60000); return `${p.h}:${String(p.mi).padStart(2, '0')}`; };   // 分に四捨五入
   const jstDayIndex = t => Math.floor((t + 9 * H) / DAY);
 
   function moonInfo(t, obs) {
@@ -598,19 +599,39 @@ const Midokoro = (() => {
 
   function analyze(dateY, dateM, dateD, obs) {
     const base = Date.UTC(dateY, dateM - 1, dateD, 6);  // 15:00 JST
-    const sunset = S.crossing('Sun', obs, base, base + 6 * H, -0.833, -1);
+    // 日の出入り・月の出入りは国立天文台と同じ定義（大気差 35′08″）
+    const SUN_H0 = -(35.133 + 16) / 60;          // 太陽の上の縁が地平線に接する
+    const sunset = S.crossing('Sun', obs, base, base + 6 * H, SUN_H0, -1);
     const dark = S.crossing('Sun', obs, sunset, sunset + 3 * H, -18, -1);
     const dawn = S.crossing('Sun', obs, sunset + 6 * H, sunset + 16 * H, -18, 1);
-    const sunrise = S.crossing('Sun', obs, sunset + 6 * H, sunset + 16 * H, -0.833, 1);
+    const sunrise = S.crossing('Sun', obs, sunset + 6 * H, sunset + 16 * H, SUN_H0, 1);
     const evening = sunset + 60 * MIN;
 
     // 月
     const moon = moonInfo(evening, obs);
     const moonAltEve = S.altOf('Moon', evening, obs);
     moon.altEve = moonAltEve;
-    moon.set = S.crossing('Moon', obs, sunset - 2 * H, sunset + 22 * H, -0.3, -1, 15 * MIN);
-    moon.rise = S.crossing('Moon', obs, sunset - 2 * H, sunset + 22 * H, -0.3, 1, 15 * MIN);
+    // 月の出入り：月の中心が地平線に一致する時刻（地表から見た位置）
+    const moonH0 = -35.133 / 60;
+    moon.set = S.crossing('Moon', obs, sunset - 2 * H, sunset + 22 * H, moonH0, -1, 15 * MIN);
+    moon.rise = S.crossing('Moon', obs, sunset - 2 * H, sunset + 22 * H, moonH0, 1, 15 * MIN);
+    // その日（0時〜24時）の月の出・月の入り（国立天文台の表と同じ扱い）
+    const day0 = Date.UTC(dateY, dateM - 1, dateD) - 9 * H;
+    moon.dayRise = S.crossing('Moon', obs, day0, day0 + 24 * H, moonH0, 1, 10 * MIN);
+    moon.daySet = S.crossing('Moon', obs, day0, day0 + 24 * H, moonH0, -1, 10 * MIN);
     moon.upAtSunset = S.altOf('Moon', sunset, obs) > 0;
+    // 今夜の月が空にある間の、月の出と月の入り
+    {
+      const lastRiseBefore = (t1) => { let t = null, from = t1 - 26 * H; for (;;) { const x = S.crossing('Moon', obs, from, t1, moonH0, 1, 10 * MIN); if (!x) break; t = x; from = x + 10 * MIN; } return t; };
+      if (S.altOf('Moon', sunset, obs) > moonH0) {
+        moon.nightRise = lastRiseBefore(sunset);
+        moon.nightSet = S.crossing('Moon', obs, sunset, sunset + 26 * H, moonH0, -1, 10 * MIN);
+      } else {
+        const rs = S.crossing('Moon', obs, sunset, sunrise, moonH0, 1, 10 * MIN);
+        moon.nightRise = rs;
+        moon.nightSet = rs ? S.crossing('Moon', obs, rs, rs + 26 * H, moonH0, -1, 10 * MIN) : null;
+      }
+    }
 
     // 惑星
     const sunEve = S.bodyEq('Sun', evening);
@@ -908,7 +929,7 @@ const Moon3D = (() => {
     // 海
     ['晴れの海', 28.0, 17.5, 'm'], ['静かの海', 8.5, 31.4, 'm'], ['危難の海', 17.0, 59.1, 'm'], ['豊かの海', -7.8, 51.3, 'm'],
     ['神酒の海', -15.2, 35.5, 'm'], ['雨の海', 32.8, -15.6, 'm'], ['嵐の大洋', 18.4, -57.4, 'm'], ['雲の海', -21.3, -16.6, 'm'],
-    ['湿りの海', -24.4, -38.6, 'm'], ['氷の海', 56.0, 1.4, 'm'], ['蒸気の海', 13.3, 3.6, 'm'], ['知られた海', -10.0, -23.1, 'm'],
+    ['湿りの海', -24.4, -38.6, 'm'], ['氷の海', 56.0, 1.4, 'm'], ['蒸気の海', 13.3, 3.6, 'm'], ['既知の海', -10.0, -23.1, 'm'],
     ['島の海', 7.5, -30.9, 'm'], ['虹の入江', 44.1, -31.5, 'm'], ['中央の入江', 2.4, 1.7, 'm'],
     // クレーター・山脈など
     ['コペルニクス', 9.6, -20.1, 'c'], ['ティコ', -43.3, -11.2, 'c'], ['ケプラー', 8.1, -38.0, 'c'], ['アリスタルコス', 23.7, -47.4, 'c'],
@@ -1172,8 +1193,9 @@ if (typeof module !== 'undefined') module.exports = Sat;
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } },
   };
-  const NAHA = { name: '那覇', lat: 26.2124, lon: 127.6809 };
+  const NAHA = { name: '那覇', lat: 26.2167, lon: 127.6667 };   // 国立天文台の暦計算と同じ地点
   let obs = store.get('midokoro-obs', NAHA);
+  if (obs.name === '那覇') obs = NAHA;
   const todayJst = () => { const p = M.jstParts(Date.now()); return [p.y, p.m, p.d]; };
   let ymd = todayJst();
   let report = null, viewT = 0, mode = 'all', focus = null;
@@ -1887,8 +1909,11 @@ if (typeof module !== 'undefined') module.exports = Sat;
     $('moonName').textContent = m.name;
     $('moonAge').textContent = `月齢 ${m.age.toFixed(1)}　輝いている部分 ${Math.round(m.illum * 100)}%`;
     const ev = [];
-    if (m.upAtSunset && m.set) ev.push(`日の入りのときすでに空に。月の入り ${M.hm(m.set)}`);
-    else if (m.rise) ev.push(`月の出 ${M.hm(m.rise)}` + (m.set && m.set > m.rise ? `　月の入り ${M.hm(m.set)}` : ''));
+    // 選んだ日より後の日付になる時刻には「翌日」を付ける
+    const dayEnd = Date.UTC(ymd[0], ymd[1] - 1, ymd[2] + 1) - 9 * H;
+    const hmN = t => M.hm(t) + (t >= dayEnd ? '（翌日）' : '');
+    if (m.upAtSunset && m.set) ev.push(`日の入りのときすでに空に。月の入り ${hmN(m.set)}`);
+    else if (m.rise) ev.push(`月の出 ${hmN(m.rise)}` + (m.set && m.set > m.rise ? `　月の入り ${hmN(m.set)}` : ''));
     $('moonTimes').textContent = ev.join('　');
 
     // 惑星
@@ -1912,8 +1937,16 @@ if (typeof module !== 'undefined') module.exports = Sat;
 
     // 時刻
     $('times').innerHTML = [
-      ['日の入り', r.sunset], ['暗くなる（薄明の終わり）', r.dark], ['明るくなりはじめ', r.dawn], ['日の出', r.sunrise],
-    ].map(([k, t]) => `<div><dt>${k}</dt><dd>${t ? M.hm(t) : '—'}</dd></div>`).join('');
+      ['日の入り', r.sunset], ['暗くなる（薄明の終わり）', r.dark], ['明るくなりはじめ', r.dawn], ['日の出（翌朝）', r.sunrise],
+      ['月の出', r.moon.nightRise, true], ['月の入り', r.moon.nightSet, true],
+    ].map(([k, t, isMoon]) => {
+      let label = k;
+      if (isMoon && t) {   // 選んだ日と日付が違うときは添える
+        const p = M.jstParts(Math.round(t / MIN) * MIN), dd = Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(ymd[0], ymd[1] - 1, ymd[2])) / DAY);
+        if (dd === 1) label += p.h < 12 ? '（翌朝）' : '（翌日）'; else if (dd === -1) label += '（前日）';
+      }
+      return `<div><dt>${label}</dt><dd>${t ? M.hm(t) : '—'}</dd></div>`;
+    }).join('') + (r.moon.nightRise ? '' : '<p class="noMoon">今夜は、暗い時間に月が昇りません。</p>');
 
 
     // 星図
