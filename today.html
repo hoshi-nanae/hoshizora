@@ -257,7 +257,6 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
       <div>
         <div class="mn" id="moonName"></div>
         <div class="ma" id="moonAge"></div>
-        <div class="mt" id="moonTimes"></div>
       </div>
     </div>
     <div class="moon3dBox">
@@ -269,7 +268,7 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
         <button data-ori="north">北が上</button><button data-ori="sky">空で見える向き</button>
       </div>
       <div class="chips moonOri moonOpt"><span class="lrl">画像の文字</span><button id="moonTitleBtn" aria-pressed="true">日時と場所</button></div>
-      <button class="chip makeImg" id="moonImg">月の画像作成</button>
+      <button class="chip makeImg" id="moonImg">画像作成</button>
       <p class="credit">Credit: NASA SVS（CGI Moon Kit／LRO）</p>
     </div>
   </section>
@@ -1849,7 +1848,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const ill = (1 + Math.cos((180 - Math.acos(Math.max(-1, Math.min(1, Math.cos(g.sub.b * Math.PI / 180) * Math.cos((g.sub.l - g.lib.l) * Math.PI / 180)))) * 180 / Math.PI) * Math.PI / 180)) / 2;
     $('moonTerm').innerHTML = near.length ? `<span class="tl2">欠け際で見やすい地形</span>${near.join('、')}`
       : (ill > 0.9 ? '<span class="tl2">欠け際で見やすい地形</span>満月のころは影ができにくく、地形の凹凸は見えにくい時期です。' : '');
-    $('moonInfo').innerHTML = `${M.hm(viewT)}の月（${moonOri === 'sky' ? '空で見える向き' : '北が上'}）<br>秤動 経度${sgn(g.lib.l)}° 緯度${sgn(g.lib.b)}°　見かけの大きさ ${g.diam.toFixed(1)}′`;
+    $('moonInfo').innerHTML = `${M.hm(viewT)}<br>秤動 経度${sgn(g.lib.l)}° 緯度${sgn(g.lib.b)}°　見かけの大きさ ${g.diam.toFixed(1)}′`;
   }
   function scheduleMoon() { clearTimeout(moonTimer); moonTimer = setTimeout(drawMoon, 120); }
   let moonTitle = store.get('midokoro-moontitle', true);
@@ -1907,14 +1906,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const m = r.moon;
     $('moonIcon').innerHTML = `<svg viewBox="-30 -30 60 60" width="64" height="64" aria-hidden="true">${moonSvg(0, 0, 26, m.elong, m.waxing ? 0 : 180)}</svg>`;
     $('moonName').textContent = m.name;
-    $('moonAge').textContent = `月齢 ${m.age.toFixed(1)}　輝いている部分 ${Math.round(m.illum * 100)}%`;
-    const ev = [];
-    // 選んだ日より後の日付になる時刻には「翌日」を付ける
-    const dayEnd = Date.UTC(ymd[0], ymd[1] - 1, ymd[2] + 1) - 9 * H;
-    const hmN = t => M.hm(t) + (t >= dayEnd ? '（翌日）' : '');
-    if (m.upAtSunset && m.set) ev.push(`日の入りのときすでに空に。月の入り ${hmN(m.set)}`);
-    else if (m.rise) ev.push(`月の出 ${hmN(m.rise)}` + (m.set && m.set > m.rise ? `　月の入り ${hmN(m.set)}` : ''));
-    $('moonTimes').textContent = ev.join('　');
+    $('moonAge').textContent = `月齢 ${m.age.toFixed(1)}　輝面比 ${Math.round(m.illum * 100)}%`;
 
     // 惑星
     // 月の満ち欠け（選んだ日の0時以降で次に来るもの）
