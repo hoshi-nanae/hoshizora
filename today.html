@@ -1289,7 +1289,8 @@ if (typeof module !== 'undefined') module.exports = Sat;
       if (h.alt < 1 || !P.inside(h.alt, h.az)) continue;
       if (P.eye && !(focus && focus.names.includes(s.name))) continue;
       const [x, y] = P.p(h.alt, h.az);
-      (hasFc && fconst.includes(STAR_CONST[s.name]) ? nmFc : nm).push(`<text x="${(x + 6).toFixed(1)}" y="${(y - 5).toFixed(1)}">${s.name}</text>`);
+      const off = STAR_LABEL[s.name] || { dx: 6, dy: -5 };
+      (hasFc && fconst.includes(STAR_CONST[s.name]) ? nmFc : nm).push(`<text x="${(x + off.dx).toFixed(1)}" y="${(y + off.dy).toFixed(1)}"${off.mid ? ' text-anchor="middle" style="text-anchor:middle"' : ''}>${s.name}</text>`);
     }
     parts.push(`<g class="snames${hasFc ? ' other' : ''}">${nm.join('')}</g>`);
     if (hasFc) parts.push(`<g class="snames fc">${nmFc.join('')}</g>`);
@@ -1665,6 +1666,16 @@ if (typeof module !== 'undefined') module.exports = Sat;
   const LABEL_POS = {
     Sgr: [290.2, -29.9],    // いて：ティーポットの東側（線や星と重ならない場所）
     Ari: [35.3, 20.7],      // おひつじ：ハマルの少し下
+    Aur: [83.0, 38.0],      // ぎょしゃ：五角形の真ん中
+    Ori: [81.0, 0.8],       // オリオン：三つ星（ミンタカ）の先
+    Lyr: [286.0, 34.5],     // こと：平行四辺形の外
+    Cnc: [134.0, 23.0],     // かに：四角の外
+  };
+
+  // 星の名前の位置を個別に決める星（画面上のずらし幅）
+  const STAR_LABEL = {
+    カペラ: { dx: 6, dy: -13 },             // 少し上
+    ベテルギウス: { dx: 0, dy: 18, mid: true }, // 星の真下
   };
 
   // ---- 注目する星座 ----
