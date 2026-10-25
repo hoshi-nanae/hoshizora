@@ -155,11 +155,17 @@ h2 { font-family: var(--mincho); font-weight: 700; font-size: 19px; margin: 0 0 
 .moonrow { display: flex; gap: 16px; align-items: center; }
 .moonrow .mn { font-family: var(--mincho); font-weight: 700; font-size: 22px; line-height: 1.3; }
 .moon3dBox { margin-top: 14px; text-align: center; }
-#moon3d { display: block; width: min(300px, 82%); height: auto; margin: 0 auto; }
+#moon3d { display: block; width: min(340px, 92%); height: auto; margin: 0 auto; }
 .moonInfo { font-size: 13px; color: var(--dim); margin: 8px 0 8px; }
 .moonOri { justify-content: center; }
 .moonOri button { border: 1px solid var(--rim); background: transparent; border-radius: 16px; padding: 3px 12px; font-size: 13px; min-height: 30px; color: var(--dim); }
 .moonOri button[aria-pressed="true"] { background: var(--rim); color: var(--ink); }
+.moonOpt { margin-top: 8px; }
+#moonLbl { margin-bottom: 8px; }
+#moonLbl .lrl { font-size: 12px; color: var(--faint); margin-right: 4px; }
+.moonTerm { font-size: 14px; color: var(--ink); margin: 0 auto 10px; max-width: 30em; }
+.moonTerm .tl2 { display: block; font-size: 12px; color: var(--faint); }
+.moonOpt .lrl { font-size: 12px; color: var(--faint); margin-right: 4px; }
 .credit { font-size: 11px; color: var(--faint); margin: 8px 0 0; }
 .moonrow .ma, .moonrow .mt { font-size: 14px; color: var(--dim); }
 
@@ -196,7 +202,6 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
       <input type="date" id="datePick" aria-label="日付を選ぶ"></label>
     <button class="navbtn" id="next" aria-label="次の日">›</button>
   </div>
-
 
   <div id="chartBox">
     <svg id="chart" role="img" aria-label="星図"></svg>
@@ -257,12 +262,20 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
     <div class="moon3dBox">
       <canvas id="moon3d" width="560" height="560" aria-label="月の見え方"></canvas>
       <p class="moonInfo" id="moonInfo"></p>
+      <p class="moonTerm" id="moonTerm"></p>
+      <div class="chips moonOri" id="moonLbl" role="group" aria-label="地形の名前"><span class="lrl">地形の名前</span><button data-lbl="none">なし</button><button data-lbl="m">海</button><button data-lbl="all">海とクレーター</button></div>
       <div class="chips moonOri" id="moonOri" role="group" aria-label="月の向き">
         <button data-ori="north">北が上</button><button data-ori="sky">空で見える向き</button>
       </div>
+      <div class="chips moonOri moonOpt"><span class="lrl">画像の文字</span><button id="moonTitleBtn" aria-pressed="true">日時と場所</button></div>
       <button class="chip makeImg" id="moonImg">月の画像作成</button>
-      <p class="credit">月面写真：NASA SVS（CGI Moon Kit／LRO）</p>
+      <p class="credit">Credit: NASA SVS（CGI Moon Kit／LRO）</p>
     </div>
+  </section>
+
+  <section>
+    <h2>月の満ち欠け</h2>
+    <ul id="phases"></ul>
   </section>
 
   <section>
@@ -274,11 +287,6 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
     <h2>人工衛星</h2>
     <ul id="sats" class="hllist"></ul>
     <p class="satStatus" id="satStatus" role="status"></p>
-  </section>
-
-  <section>
-    <h2>月の満ち欠け</h2>
-    <ul id="phases"></ul>
   </section>
 
 
@@ -562,7 +570,7 @@ const Midokoro = (() => {
     const sun = S.bodyEq('Sun', t), moon = S.moonTopo(t, obs);
     const elong = S.sep(sun, moon);
     let name;
-    const special = { 13: '十三夜の月', 16: '十六夜の月', 17: '立待月', 18: '居待月', 19: '寝待月', 20: '更待月' };
+    const special = { 13: '十三夜の月', 15: '十五夜', 16: '十六夜の月', 17: '立待月', 18: '居待月', 19: '寝待月', 20: '更待月' };
     if (pa < 8 || pa > 352) name = '新月';
     else if (pa >= 82 && pa <= 98) name = '上弦の月';
     else if (pa >= 172 && pa <= 188) name = '満月';
@@ -895,7 +903,33 @@ const Moon3D = (() => {
     return ((th - 90) + 720) % 360;
   }
 
-  return { geometry, renderDisk, litLimbAngle };
+  // 月の主な地形（緯度・経度は目安。経度は東が＋）
+  const FEATURES = [
+    // 海
+    ['晴れの海', 28.0, 17.5, 'm'], ['静かの海', 8.5, 31.4, 'm'], ['危難の海', 17.0, 59.1, 'm'], ['豊かの海', -7.8, 51.3, 'm'],
+    ['神酒の海', -15.2, 35.5, 'm'], ['雨の海', 32.8, -15.6, 'm'], ['嵐の大洋', 18.4, -57.4, 'm'], ['雲の海', -21.3, -16.6, 'm'],
+    ['湿りの海', -24.4, -38.6, 'm'], ['氷の海', 56.0, 1.4, 'm'], ['蒸気の海', 13.3, 3.6, 'm'], ['知られた海', -10.0, -23.1, 'm'],
+    ['島の海', 7.5, -30.9, 'm'], ['虹の入江', 44.1, -31.5, 'm'], ['中央の入江', 2.4, 1.7, 'm'],
+    // クレーター・山脈など
+    ['コペルニクス', 9.6, -20.1, 'c'], ['ティコ', -43.3, -11.2, 'c'], ['ケプラー', 8.1, -38.0, 'c'], ['アリスタルコス', 23.7, -47.4, 'c'],
+    ['プラトン', 51.6, -9.4, 'c'], ['アルキメデス', 29.7, -4.0, 'c'], ['プトレマイオス', -9.3, -1.9, 'c'], ['アルフォンスス', -13.4, -3.2, 'c'],
+    ['アルザケル', -18.2, -1.9, 'c'], ['クラビウス', -58.4, -14.4, 'c'], ['テオフィルス', -11.4, 26.4, 'c'], ['キリルス', -13.2, 24.0, 'c'],
+    ['カタリナ', -18.0, 23.6, 'c'], ['ラングレヌス', -8.9, 61.0, 'c'], ['ペタビウス', -25.1, 60.4, 'c'], ['ポシドニウス', 31.8, 29.9, 'c'],
+    ['エウドクソス', 44.3, 16.3, 'c'], ['アリストテレス', 50.2, 17.4, 'c'], ['ヘルクレス', 46.7, 39.1, 'c'], ['アトラス', 46.7, 44.4, 'c'],
+    ['グリマルディ', -5.2, -68.6, 'c'], ['ガッサンディ', -17.6, -40.1, 'c'],
+    ['アペニン山脈', 18.9, -3.7, 'c'], ['アルプス山脈', 48.4, -0.6, 'c'], ['コーカサス山脈', 38.4, 10.0, 'c'], ['直線の壁', -22.1, -7.8, 'c'],
+  ];
+  // 円盤上の位置（北が上、u：右、v：上、半径1）と、日の当たり具合
+  function featuresOnDisk(g) {
+    const f = sph(g.lib.b, g.lib.l), N = [0, 0, 1];
+    const up = nrm(N.map((x, i) => x - dot(N, f) * f[i])), right = cross(up, f), s = sph(g.sub.b, g.sub.l);
+    return FEATURES.map(([name, lat, lon, kind]) => {
+      const p = sph(lat, lon);
+      return { name, kind, u: dot(p, right), v: dot(p, up), w: dot(p, f), sunAlt: Math.asin(Math.max(-1, Math.min(1, dot(p, s)))) / r };
+    });
+  }
+
+  return { geometry, renderDisk, litLimbAngle, featuresOnDisk };
 })();
 if (typeof module !== 'undefined') module.exports = Moon3D;
 
@@ -1698,13 +1732,13 @@ if (typeof module !== 'undefined') module.exports = Sat;
       g.fillStyle = '#0d1433'; g.fillRect(0, 0, W, W);
       g.drawImage(canvas, (W - 1000) / 2, (W - 1000) / 2);
       const ROUNDF = "'Tsukushi A Round Gothic','筑紫A丸ゴシック','Hiragino Maru Gothic ProN',sans-serif";
-      if (imgTitle) {
+      if (moonTitle) {
         const p = M.jstParts(viewT), place = obs.name === '現在地' ? '' : `（${obs.name}）`;
         g.fillStyle = '#eee8d4'; g.font = `700 40px ${ROUNDF}`; g.textBaseline = 'top';
         g.fillText(`${p.m}月${p.d}日 ${M.hm(viewT)}ごろの月${place}`, 36, 32);
       }
       g.fillStyle = 'rgba(200,206,235,.55)'; g.font = `24px ${ROUNDF}`; g.textAlign = 'right'; g.textBaseline = 'bottom';
-      g.fillText('月面写真：NASA SVS / LRO', W - 30, W - 24);
+      g.fillText('Credit: NASA SVS / LRO', W - 30, W - 24);
       const blob = await new Promise(ok => cv.toBlob(ok, 'image/png'));
       const p = M.jstParts(viewT);
       showImage(blob, `moon-${p.y}${String(p.m).padStart(2, '0')}${String(p.d).padStart(2, '0')}-${String(p.h).padStart(2, '0')}${String(p.mi).padStart(2, '0')}.png`, '今の時刻の月を画像にしました。時刻や向きを変えたら、作り直してください。');
@@ -1740,6 +1774,32 @@ if (typeof module !== 'undefined') module.exports = Sat;
     img.src = 'lroc_color_2k.jpg';
   }
   // 月を描いたキャンバスを返す（size：月の直径、pad：まわりの余白）
+  let moonLabels = store.get('midokoro-moonlabels', 'm');   // none / m（海） / all（海とクレーター）
+  function drawFeatureLabels(c, g, size, angleDeg) {
+    if (moonLabels === 'none') return;
+    const A = angleDeg * Math.PI / 180, R = size / 2 - 1, cs = Math.cos(A), sn = Math.sin(A);
+    const fs = Math.round(size * 0.042);
+    c.font = `500 ${fs}px "Zen Kaku Gothic New","Hiragino Sans",sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+    // 優先順：欠け際の地形 → 海 → 有名なクレーター。重なる名前は出さない
+    const TOP = ['コペルニクス', 'ティコ', 'プラトン', 'ケプラー', 'アリスタルコス', 'クラビウス'];
+    const list = Moon3D.featuresOnDisk(g).filter(ft => ft.w >= (ft.kind === 'm' ? 0.12 : 0.25) && ft.sunAlt >= 0 && (moonLabels === 'all' || ft.kind === 'm'));
+    const pri = ft => (ft.kind === 'c' && ft.sunAlt < 14 ? 0 : TOP.includes(ft.name) ? 1 : ft.kind === 'm' ? 2 : 3);
+    list.sort((a, b) => pri(a) - pri(b));
+    const boxes = [], hit = bx => boxes.some(o => bx[0] < o[2] && bx[2] > o[0] && bx[1] < o[3] && bx[3] > o[1]);
+    for (const ft of list) {
+      const x0 = ft.u * R, y0 = -ft.v * R;
+      const x = x0 * cs - y0 * sn, y = x0 * sn + y0 * cs;
+      const w = c.measureText(ft.name).width + fs * 0.3, h = fs * 1.1;
+      const cands = ft.kind === 'c' ? [y - fs * 0.85, y + fs * 0.85] : [y, y + fs * 1.15, y - fs * 1.15];
+      const ty = cands.find(cy => !hit([x - w / 2, cy - h / 2, x + w / 2, cy + h / 2]));
+      if (ty === undefined) continue;
+      boxes.push([x - w / 2, ty - h / 2, x + w / 2, ty + h / 2]);
+      if (ft.kind === 'c') { c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x, y, size * 0.006, 0, 7); c.fill(); boxes.push([x - 4, y - 4, x + 4, y + 4]); }
+      c.lineWidth = fs * 0.28; c.strokeStyle = 'rgba(10,14,35,.75)'; c.strokeText(ft.name, x, ty);
+      c.fillStyle = ft.kind === 'm' ? '#fff3c4' : '#dfe8ff'; c.fillText(ft.name, x, ty);
+    }
+  }
   function moonCanvas(t, size, pad) {
     const g = Moon3D.geometry(t, obs);
     const disk = document.createElement('canvas'); disk.width = disk.height = size;
@@ -1748,8 +1808,11 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const c = out.getContext('2d');
     c.translate(W / 2, W / 2);
     // 北が上：反時計回りに P。空で見える向き：さらに天頂を上にする
-    c.rotate(((moonOri === 'sky' ? g.q : 0) - g.P) * Math.PI / 180);
+    const ang = (moonOri === 'sky' ? g.q : 0) - g.P;
+    c.save(); c.rotate(ang * Math.PI / 180);
     c.drawImage(disk, -size / 2, -size / 2);
+    c.restore();
+    drawFeatureLabels(c, g, size, ang);
     return { canvas: out, g };
   }
   function drawMoon() {
@@ -1759,9 +1822,24 @@ if (typeof module !== 'undefined') module.exports = Sat;
     const ctx2 = $('moon3d').getContext('2d');
     ctx2.clearRect(0, 0, 560, 560); ctx2.drawImage(canvas, 0, 0);
     const sgn = x => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1);
+    // 欠け際（太陽の高さが低く、影が長い場所）で見やすい地形
+    const near = Moon3D.featuresOnDisk(g).filter(ft => ft.kind === 'c' && ft.w > 0.2 && ft.sunAlt > 0 && ft.sunAlt < 14).sort((a, b) => a.sunAlt - b.sunAlt).map(ft => ft.name);
+    const ill = (1 + Math.cos((180 - Math.acos(Math.max(-1, Math.min(1, Math.cos(g.sub.b * Math.PI / 180) * Math.cos((g.sub.l - g.lib.l) * Math.PI / 180)))) * 180 / Math.PI) * Math.PI / 180)) / 2;
+    $('moonTerm').innerHTML = near.length ? `<span class="tl2">欠け際で見やすい地形</span>${near.join('、')}`
+      : (ill > 0.9 ? '<span class="tl2">欠け際で見やすい地形</span>満月のころは影ができにくく、地形の凹凸は見えにくい時期です。' : '');
     $('moonInfo').innerHTML = `${M.hm(viewT)}の月（${moonOri === 'sky' ? '空で見える向き' : '北が上'}）<br>秤動 経度${sgn(g.lib.l)}° 緯度${sgn(g.lib.b)}°　見かけの大きさ ${g.diam.toFixed(1)}′`;
   }
   function scheduleMoon() { clearTimeout(moonTimer); moonTimer = setTimeout(drawMoon, 120); }
+  let moonTitle = store.get('midokoro-moontitle', true);
+  const renderMoonTitle = () => $('moonTitleBtn').setAttribute('aria-pressed', moonTitle);
+  $('moonTitleBtn').onclick = () => { moonTitle = !moonTitle; store.set('midokoro-moontitle', moonTitle); renderMoonTitle(); };
+  renderMoonTitle();
+  const renderMoonLabels = () => document.querySelectorAll('#moonLbl [data-lbl]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lbl === moonLabels));
+  $('moonLbl').onclick = e => {
+    const b = e.target.closest('[data-lbl]'); if (!b) return;
+    moonLabels = b.dataset.lbl; store.set('midokoro-moonlabels', moonLabels); renderMoonLabels(); drawMoon();
+  };
+  renderMoonLabels();
   $('moonOri').onclick = e => {
     const b = e.target.closest('[data-ori]'); if (!b) return;
     moonOri = b.dataset.ori; store.set('midokoro-moonori', moonOri); drawMoon();
