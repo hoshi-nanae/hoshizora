@@ -179,7 +179,9 @@ h2 { font-family: var(--mincho); font-weight: 700; font-size: 19px; margin: 0 0 
 
 dl#times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 0; }
 dl#times dt { font-size: 13px; color: var(--dim); }
-dl#times .noMoon { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--dim); }
+dl#times dd.nodata { font-size: 14px; font-weight: 500; color: var(--dim); padding-top: 6px; }
+dl#times .noMoon .tl2 { display: block; font-size: 13px; color: var(--dim); }
+dl#times .noMoon { grid-column: 1 / -1; margin: 4px 0 0; font-size: 15px; color: var(--ink); }
 dl#times dd { margin: 0; font-family: var(--mincho); font-size: 22px; font-weight: 700; }
 
 .consts { margin: 0; }
@@ -1270,8 +1272,10 @@ if (typeof module !== 'undefined') module.exports = Sat;
   function shiftDay(k) {
     const d = new Date(Date.UTC(ymd[0], ymd[1] - 1, ymd[2] + k));
     ymd = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
-    run();
+    run(true);
   }
+  const dayStart = a => Date.UTC(a[0], a[1] - 1, a[2]) - 9 * H;   // その日の0時（日本時間）
+  let lastYmd = null;
 
   // ---- 描画用の投影 ----
   function projector(kind, center) {
@@ -1597,7 +1601,8 @@ if (typeof module !== 'undefined') module.exports = Sat;
         if (x < 10 || x > P.W - 10) continue;
         parts.push(`<text class="dir" x="${x.toFixed(1)}" y="${(y0 + 22).toFixed(1)}">${M.dirName(az)}</text>`);
       }
-      // 高度の目安線（ステレオ投影では弧になる）
+      // 高度の目安線（ステレオ投影では弧になる）。星や月の下に敷く
+      const altParts = [];
       for (const alt of [10, 20, 30, 40, 50, 60, 70, 80]) {
         const pts = [];
         for (let d = -100; d <= 100; d += 4) {
@@ -1606,12 +1611,13 @@ if (typeof module !== 'undefined') module.exports = Sat;
           const [x, y] = P.p(alt, az); pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
         }
         if (pts.length < 2) continue;
-        parts.push(`<polyline class="altline" points="${pts.join(' ')}"/>`);
+        altParts.push(`<polyline class="altline" points="${pts.join(' ')}"/>`);
         const [lx, ly] = pts[0].split(',').map(Number);
         const [rx, ry] = pts[pts.length - 1].split(',').map(Number);
         const [x, y] = lx < 4 ? [6, ly] : [lx + 4, ly];
-        if (y > 12 && y < P.base - 6) parts.push(`<text class="altmark" x="${x.toFixed(1)}" y="${(y - 4).toFixed(1)}">${alt}°</text>`);
+        if (y > 12 && y < P.base - 6) altParts.push(`<text class="altmark" x="${x.toFixed(1)}" y="${(y - 4).toFixed(1)}">${alt}°</text>`);
       }
+      parts.splice(1, 0, ...altParts);
     }
 
     const svg = $('chart');
@@ -1878,7 +1884,12 @@ if (typeof module !== 'undefined') module.exports = Sat;
 
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-  function run() {
+  // keep：日付を変えたとき、直前の表示（モード・方角・時刻）を引き継ぐ
+  function run(keep) {
+    const prev = keep && report && lastYmd ? {
+      off: viewT - dayStart(lastYmd), mode,
+      manual: manual || (mode !== 'all' && curCenter ? { ...curCenter } : null),
+    } : null;
     report = M.analyze(ymd[0], ymd[1], ymd[2], obs);
     const r = report;
     computeSats(r);
@@ -1928,25 +1939,29 @@ if (typeof module !== 'undefined') module.exports = Sat;
         <span class="pl-w">${esc(p.when)}${p.faint && p.status !== 'none' ? '（双眼鏡・望遠鏡で）' : ''}</span></li>`).join('');
 
     // 時刻
+    // 月の出・月の入りは、その日（0時〜24時）の時刻（国立天文台の表と同じ）。
+    // その下に「今夜の月」を、日付つきで添える
+    const dayNum = t => { const p = M.jstParts(Math.round(t / MIN) * MIN); return Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(ymd[0], ymd[1] - 1, ymd[2])) / DAY); };
+    const withDay = t => { const p = M.jstParts(Math.round(t / MIN) * MIN); return dayNum(t) === 0 ? M.hm(t) : `${p.d}日 ${M.hm(t)}`; };
+    const mn = r.moon;
+    let tonight;
+    if (!mn.nightRise) tonight = '暗い時間に月は昇りません。';
+    else if (mn.nightRise < r.sunset) tonight = `日の入りのときすでに空にあり、${mn.nightSet ? withDay(mn.nightSet) + 'に沈みます。' : '一晩中見えます。'}`;
+    else tonight = `${withDay(mn.nightRise)}に昇り、` + (mn.nightSet && mn.nightSet < r.sunrise ? `${withDay(mn.nightSet)}に沈みます。` : '明け方まで見えます。');
     $('times').innerHTML = [
       ['日の入り', r.sunset], ['暗くなる（薄明の終わり）', r.dark], ['明るくなりはじめ', r.dawn], ['日の出（翌朝）', r.sunrise],
-      ['月の出', r.moon.nightRise, true], ['月の入り', r.moon.nightSet, true],
-    ].map(([k, t, isMoon]) => {
-      let label = k;
-      if (isMoon && t) {   // 選んだ日と日付が違うときは添える
-        const p = M.jstParts(Math.round(t / MIN) * MIN), dd = Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(ymd[0], ymd[1] - 1, ymd[2])) / DAY);
-        if (dd === 1) label += p.h < 12 ? '（翌朝）' : '（翌日）'; else if (dd === -1) label += '（前日）';
-      }
-      return `<div><dt>${label}</dt><dd>${t ? M.hm(t) : '—'}</dd></div>`;
-    }).join('') + (r.moon.nightRise ? '' : '<p class="noMoon">今夜は、暗い時間に月が昇りません。</p>');
+      ['月の出', mn.dayRise, 'この日は昇りません'], ['月の入り', mn.daySet, 'この日は沈みません'],
+    ].map(([k, t, none]) => `<div><dt>${k}</dt><dd${t ? '' : ' class="nodata"'}>${t ? M.hm(t) : (none || '—')}</dd></div>`).join('')
+      + `<p class="noMoon"><span class="tl2">今夜の月</span>${tonight}</p>`;
 
 
     // 星図
-    // 開いたときは、日の入り1時間後の空全体
+    // 開いたときは、日の入り1時間後の空全体。日付を変えたときは同じ時刻・同じ向きのまま
     focus = null;
-    manual = null;
-    mode = 'all';
-    viewT = r.evening;
+    manual = prev ? prev.manual : null;
+    mode = prev ? prev.mode : 'all';
+    viewT = prev ? Math.min(r.sunrise, Math.max(r.sunset, dayStart(ymd) + prev.off)) : r.evening;
+    lastYmd = [...ymd];
     const slider = $('slider');
     slider.min = 0; slider.max = Math.round((r.sunrise - r.sunset) / MIN); slider.step = 10;
     slider.value = Math.round((viewT - r.sunset) / MIN);
@@ -1960,10 +1975,10 @@ if (typeof module !== 'undefined') module.exports = Sat;
   // 日付を選ぶ（日付の文字を押すとカレンダーが開く）
   $('datePick').onchange = e => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value);
-    if (m) { ymd = [Number(m[1]), Number(m[2]), Number(m[3])]; run(); }
+    if (m) { ymd = [Number(m[1]), Number(m[2]), Number(m[3])]; run(true); }
   };
   $('datePick').onclick = e => { try { e.target.showPicker && e.target.showPicker(); } catch (er) { } };
-  $('todayBtn').onclick = () => { ymd = todayJst(); run(); };
+  $('todayBtn').onclick = () => { ymd = todayJst(); run(true); };
   $('slider').oninput = e => { viewT = report.sunset + Number(e.target.value) * MIN; drawChart(); scheduleMoon(); };
   $('modeAll').onclick = () => { mode = 'all'; drawChart(); };
   $('modeEye').onclick = () => { mode = 'eye'; drawChart(); };
