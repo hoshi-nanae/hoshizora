@@ -1293,7 +1293,8 @@ if (typeof module !== 'undefined') module.exports = Sat;
       };
     }
     // 見る方向の地平線上を中心にしたステレオ投影：形がゆがまず、地平線はまっすぐ
-    const W = 600, Hh = 400, base = Hh - 34, span = 96, top = Math.max(50, center.top);
+    // 通り道全体を入れるときは、横長（2:1）にして見える幅を広げる
+    const W = center.wide ? 800 : 600, Hh = 400, base = Hh - 34, span = center.span || 96, top = Math.max(50, center.top);
     const rad = Math.PI / 180;
     const s = Math.min((W / 2) / (2 * Math.tan(span / 4 * rad)), (base - 14) / (2 * Math.tan(top / 2 * rad)));
     const raw = (alt, az) => {
@@ -1362,7 +1363,8 @@ if (typeof module !== 'undefined') module.exports = Sat;
       P = eyeProjector(center);
     } else {
       if (mode === 'dir') {
-        if (manual) center = { az: manual.az, top: manual.top || 60 };
+        if (manual) center = { az: manual.az, top: manual.top || 60, span: manual.span, wide: manual.wide };
+        else if (focus && focus.fit) center = { ...focus.fit };
         else if (focus) { const ha = focus.haAt(t); center = { az: ha.az, top: Math.min(85, ha.alt + 30) }; }
         else center = { az: 180, top: 60 };
       }
@@ -1658,7 +1660,17 @@ if (typeof module !== 'undefined') module.exports = Sat;
   function makeFocus(h) {
     if (h && h.sat) {
       const pt = { alt: h.sat.max.alt, az: h.sat.max.az };
-      return { t: h.sat.maxT, sat: h.sat, names: [h.satName], haAt: () => pt, hbAt: () => pt };
+      // 見えている間の通り道がすべて入る向きと広さ
+      const vis = h.sat.fullPath.filter(q => q.lit && q.alt > 2);
+      let fit = null;
+      if (vis.length > 1) {
+        const a0 = vis[0].az, rel = vis.map(q => ((q.az - a0 + 540) % 360) - 180);
+        const lo = Math.min(...rel), hi = Math.max(...rel), maxAlt = Math.max(...vis.map(q => q.alt));
+        const range = hi - lo;
+        fit = { az: (a0 + (lo + hi) / 2 + 360) % 360, span: Math.max(80, Math.min(230, range + 26)), top: Math.max(45, Math.min(88, maxAlt + 14)) };
+        fit.wide = fit.span > 110;
+      }
+      return { t: h.sat.maxT, sat: h.sat, fit, names: [h.satName], haAt: () => pt, hbAt: () => pt };
     }
     if (!h || !h.focus) return null;
     const look = (o, t) => o.kind === 'moon' ? S.moonTopo(t, obs) : o.kind === 'planet' ? S.bodyEq(o.id, t) : o;
@@ -2063,7 +2075,8 @@ if (typeof module !== 'undefined') module.exports = Sat;
   });
   svgEl.addEventListener('pointermove', e => {
     if (!drag || e.pointerId !== drag.id) return;
-    const k = 600 / svgEl.getBoundingClientRect().width;          // 画面の px → 星図の座標
+    const vbw = svgEl.viewBox.baseVal.width || 600;
+    const k = vbw / svgEl.getBoundingClientRect().width;          // 画面の px → 星図の座標
     const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
     if (!drag.moved) {
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
@@ -2071,11 +2084,11 @@ if (typeof module !== 'undefined') module.exports = Sat;
       drag.moved = true;
       try { svgEl.setPointerCapture(drag.id); } catch (er) { }
     }
-    const degPerUnit = mode === 'eye' ? 45 / 600 : 96 / 600;
+    const degPerUnit = mode === 'eye' ? 45 / 600 : (drag.c.span || 96) / vbw;
     const az = (drag.c.az - dx * degPerUnit + 720) % 360;
     manual = mode === 'eye'
       ? { az, alt: Math.max(5, Math.min(85, drag.c.alt + dy * degPerUnit)) }
-      : { az, top: drag.c.top };
+      : { az, top: drag.c.top, span: drag.c.span, wide: drag.c.wide };
     if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawChart(); });
   });
   const endDrag = () => { drag = null; };
