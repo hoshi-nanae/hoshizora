@@ -98,6 +98,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #fcSel option { color: #000; }
 .fcMode button { border: 1px solid var(--rim); background: transparent; border-radius: 16px; padding: 3px 11px; font-size: 13px; min-height: 30px; color: var(--dim); }
 .fcMode button[aria-pressed="true"] { background: var(--rim); color: var(--ink); }
+#chart .astline polyline { fill: none; stroke: #f4dc95; stroke-width: 1.2; opacity: .9; stroke-linejoin: round; }
+#chart .astname { fill: #f4dc95; font-size: 14px; font-family: var(--gothic); text-anchor: middle; }
 #chart .clines.fc polyline { stroke: #a9b4f5; stroke-width: 1.2; opacity: .95; }
 #chart .cnames.fc text { fill: #d4d9f5; font-size: 14px; opacity: 1; }
 #chart.fc-hide .other { display: none; }
@@ -1470,6 +1472,43 @@ if (typeof module !== 'undefined') module.exports = Sat;
     }
     if (!P.eye) parts.push(`<g class="cnames${hasFc ? ' other' : ''}">${cl.join('')}</g>`);
     if (hasFc) parts.push(`<g class="cnames fc">${clFc.join('')}</g>`);
+    // 星の並び（北斗七星など）：大円に沿って細かく点を打って描く
+    for (const id of fconst.filter(x => AST[x])) {
+      const a = AST[id], segs = [];
+      let sx = 0, sy = 0, sz = 0, n = 0;
+      for (const chain of a.lines) {
+        let pts = [];
+        const flush = () => { if (pts.length > 1) segs.push(`<polyline points="${pts.join(' ')}"/>`); pts = []; };
+        for (let k = 0; k < chain.length - 1; k++) {
+          const [r1, d1] = ST[chain[k]], [r2, d2] = ST[chain[k + 1]];
+          const v1 = [Math.cos(d1 * Math.PI / 180) * Math.cos(r1 * Math.PI / 180), Math.cos(d1 * Math.PI / 180) * Math.sin(r1 * Math.PI / 180), Math.sin(d1 * Math.PI / 180)];
+          const v2 = [Math.cos(d2 * Math.PI / 180) * Math.cos(r2 * Math.PI / 180), Math.cos(d2 * Math.PI / 180) * Math.sin(r2 * Math.PI / 180), Math.sin(d2 * Math.PI / 180)];
+          const om = Math.acos(Math.max(-1, Math.min(1, v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2])));
+          const steps = Math.max(1, Math.ceil(om * 180 / Math.PI / 2));
+          for (let q = (k === 0 ? 0 : 1); q <= steps; q++) {
+            const f = q / steps, s1 = Math.sin((1 - f) * om) / Math.sin(om || 1), s2 = Math.sin(f * om) / Math.sin(om || 1);
+            const v = om < 1e-9 ? v1 : v1.map((x, i) => s1 * x + s2 * v2[i]);
+            const ra = (Math.atan2(v[1], v[0]) * 180 / Math.PI + 360) % 360, dec = Math.asin(v[2]) * 180 / Math.PI;
+            const h = S.horiz({ ra, dec }, ctx);
+            if (!P.inside(h.alt, h.az)) { flush(); continue; }
+            const [x, y] = P.p(h.alt, h.az); pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+          }
+        }
+        flush();
+        for (const nm of new Set(a.at || chain)) { const [r0, d0] = ST[nm]; sx += Math.cos(d0 * Math.PI / 180) * Math.cos(r0 * Math.PI / 180); sy += Math.cos(d0 * Math.PI / 180) * Math.sin(r0 * Math.PI / 180); sz += Math.sin(d0 * Math.PI / 180); n++; }
+      }
+      parts.push(`<g class="astline">${segs.join('')}</g>`);
+      const h = S.horiz({ ra: (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360, dec: Math.atan2(sz, Math.hypot(sx, sy)) * 180 / Math.PI }, ctx);
+      if (h.alt > 3 && P.inside(h.alt, h.az)) {
+        let [x, y] = P.p(h.alt, h.az);
+        if (a.away) {   // 柄と反対側（ひしゃくの外）に名前を出す
+          const hh = S.horiz({ ra: ST[a.away][0], dec: ST[a.away][1] }, ctx), [ax2, ay2] = P.p(hh.alt, hh.az);
+          const dx = x - ax2, dy = y - ay2, L = Math.hypot(dx, dy) || 1;
+          x += dx / L * 34; y += dy / L * 34;
+        }
+        parts.push(`<text class="astname" x="${x.toFixed(1)}" y="${(y + 5).toFixed(1)}">${a.name}</text>`);
+      }
+    }
 
     // 一等星の名前
     const nm = [], nmFc = [];
@@ -1479,7 +1518,7 @@ if (typeof module !== 'undefined') module.exports = Sat;
       if (P.eye && !(focus && focus.names.includes(s.name))) continue;
       const [x, y] = P.p(h.alt, h.az);
       const off = STAR_LABEL[s.name] || { dx: 6, dy: -5 };
-      (hasFc && fconst.includes(STAR_CONST[s.name]) ? nmFc : nm).push(`<text x="${(x + off.dx).toFixed(1)}" y="${(y + off.dy).toFixed(1)}"${off.mid ? ' text-anchor="middle" style="text-anchor:middle"' : ''}>${s.name}</text>`);
+      (hasFc && (fconst.includes(STAR_CONST[s.name]) || fconst.some(id => AST[id] && AST[id].stars.includes(s.name))) ? nmFc : nm).push(`<text x="${(x + off.dx).toFixed(1)}" y="${(y + off.dy).toFixed(1)}"${off.mid ? ' text-anchor="middle" style="text-anchor:middle"' : ''}>${s.name}</text>`);
     }
     parts.push(`<g class="snames${hasFc ? ' other' : ''}">${nm.join('')}</g>`);
     if (hasFc) parts.push(`<g class="snames fc">${nmFc.join('')}</g>`);
@@ -2028,10 +2067,31 @@ if (typeof module !== 'undefined') module.exports = Sat;
     フォーマルハウト: { dx: 0, dy: 18, mid: true }, // 星の真下
   };
 
+  // 星座ではない、よく知られた星の並び（赤経・赤緯 J2000）。id は ast: から始める
+  const ST = {
+    dubhe: [165.93, 61.75], merak: [165.46, 56.38], phecda: [178.46, 53.69], megrez: [183.86, 57.03],
+    alioth: [193.51, 55.96], mizar: [200.98, 54.93], alkaid: [206.89, 49.31],
+    vega: [279.23, 38.78], altair: [297.70, 8.87], deneb: [310.36, 45.28],
+    betel: [88.79, 7.41], procyon: [114.83, 5.22], sirius: [101.29, -16.72],
+    markab: [346.19, 15.21], scheat: [345.94, 28.08], alpheratz: [2.10, 29.09], algenib: [3.31, 15.18],
+    pollux: [116.33, 28.03], capella: [79.17, 46.00], aldebaran: [68.98, 16.51], rigel: [78.63, -8.20],
+    arcturus: [213.92, 19.18], spica: [201.30, -11.16], denebola: [177.26, 14.57],
+  };
+  const AST = {
+    'ast:hokuto': { name: '北斗七星', at: ['dubhe', 'merak', 'phecda', 'megrez'], away: 'alkaid', lines: [['alkaid', 'mizar', 'alioth', 'megrez', 'dubhe', 'merak', 'phecda', 'megrez']], stars: [] },
+    'ast:summer': { name: '夏の大三角', lines: [['vega', 'altair', 'deneb', 'vega']], stars: ['ベガ', 'アルタイル', 'デネブ'] },
+    'ast:winter': { name: '冬の大三角', lines: [['betel', 'procyon', 'sirius', 'betel']], stars: ['ベテルギウス', 'プロキオン', 'シリウス'] },
+    'ast:dia': { name: '冬のダイヤモンド', lines: [['sirius', 'procyon', 'pollux', 'capella', 'aldebaran', 'rigel', 'sirius']], stars: ['シリウス', 'プロキオン', 'ポルックス', 'カペラ', 'アルデバラン', 'リゲル'] },
+    'ast:square': { name: '秋の四辺形', lines: [['markab', 'scheat', 'alpheratz', 'algenib', 'markab']], stars: [] },
+    'ast:spring3': { name: '春の大三角', lines: [['arcturus', 'spica', 'denebola', 'arcturus']], stars: ['アークトゥルス', 'スピカ'] },
+    'ast:curve': { name: '春の大曲線', lines: [['dubhe', 'merak', 'phecda', 'megrez', 'dubhe'], ['megrez', 'alioth', 'mizar', 'alkaid', 'arcturus', 'spica']], stars: ['アークトゥルス', 'スピカ'] },
+  };
+  const fcName = id => AST[id] ? AST[id].name : M.CONST_JA[id] + '座';
+
   // ---- 注目する星座 ----
   const STAR_CONST = { シリウス: 'CMa', カノープス: 'Car', アークトゥルス: 'Boo', ベガ: 'Lyr', カペラ: 'Aur', リゲル: 'Ori', プロキオン: 'CMi', ベテルギウス: 'Ori', アケルナル: 'Eri', アルタイル: 'Aql', アルデバラン: 'Tau', スピカ: 'Vir', アンタレス: 'Sco', ポルックス: 'Gem', フォーマルハウト: 'PsA', デネブ: 'Cyg', レグルス: 'Leo', カストル: 'Gem', 北極星: 'UMi', すばる: 'Tau', プレセペ星団: 'Cnc' };
   function renderFconst() {
-    $('fcChips').innerHTML = fconst.map(id => `<button class="fchip" data-id="${id}" aria-label="${M.CONST_JA[id]}座を外す">${M.CONST_JA[id]}座 <span aria-hidden="true">×</span></button>`).join('');
+    $('fcChips').innerHTML = fconst.map(id => `<button class="fchip" data-id="${id}" aria-label="${fcName(id)}を外す">${fcName(id)} <span aria-hidden="true">×</span></button>`).join('');
     $('fcMode').hidden = $('fcModeL').hidden = fconst.length === 0;
     document.querySelectorAll('#fcMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === fmode));
     const svg = $('chart');
@@ -2040,7 +2100,9 @@ if (typeof module !== 'undefined') module.exports = Sat;
   }
   {
     const ids = [...new Set(LINES.map(l => l[0]))].sort((a, b) => M.CONST_JA[a].localeCompare(M.CONST_JA[b], 'ja'));
-    $('fcSel').innerHTML = '<option value="">＋ 星座を選ぶ</option>' + ids.map(id => `<option value="${id}">${M.CONST_JA[id]}座</option>`).join('');
+    $('fcSel').innerHTML = '<option value="">＋ 星座を選ぶ</option>'
+      + '<optgroup label="星の並び">' + Object.keys(AST).map(id => `<option value="${id}">${AST[id].name}</option>`).join('') + '</optgroup>'
+      + '<optgroup label="星座">' + ids.map(id => `<option value="${id}">${M.CONST_JA[id]}座</option>`).join('') + '</optgroup>';
   }
   $('fcSel').onchange = e => {
     const id = e.target.value; e.target.value = '';
