@@ -83,7 +83,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #chart .satpath { fill: none; stroke: #9fe3c8; stroke-width: 2; stroke-linecap: round; }
 #chart .satpath.shadow { stroke: #9fe3c8; stroke-width: 1; stroke-dasharray: 3 4; opacity: .45; }
 #chart .satname { fill: #9fe3c8; font-size: 13px; font-weight: 500; font-family: var(--gothic); }
-#chart .satnow { fill: #ffffff; stroke: #9fe3c8; stroke-width: 2; }
+#chart .satnow { fill: #9fe3c8; }
 #chart .sattime { fill: #cfeee2; font-size: 14px; font-weight: 500; font-family: var(--gothic); text-anchor: middle; }
 #chart .satarrow { fill: #9fe3c8; }
 .makeImg { display: block; margin: 16px auto 0; min-width: 9em; }
@@ -1555,11 +1555,16 @@ if (typeof module !== 'undefined') module.exports = Sat;
       // 見え始め・いちばん高いところ・見え終わりに時刻と向きの矢印
       const near = tt => p.fullPath.reduce((a, b) => Math.abs(b.t - tt) < Math.abs(a.t - tt) ? b : a);
       const marks = [[p.start, true], [p.maxT, false], [p.end, false]];
-      // 今の位置（白い丸）。矢印と重なるときは、矢印を少し先へずらす
-      let nowPt = null;
+      // 今の位置は、進む向きの矢印で示す（丸だと星と見分けにくいため）
+      let nowPt = null, nowAng = 0;
       if (t >= p.fullPath[0].t && t <= p.fullPath[p.fullPath.length - 1].t) {
         const q = p.fullPath.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a);
-        if (q.lit && P.inside(q.alt, q.az)) nowPt = P.p(q.alt, q.az);
+        if (q.lit && P.inside(q.alt, q.az)) {
+          nowPt = P.p(q.alt, q.az);
+          const i = p.fullPath.indexOf(q), qa = p.fullPath[Math.max(0, i - 1)], qb = p.fullPath[Math.min(p.fullPath.length - 1, i + 1)];
+          const [xa, ya] = P.p(qa.alt, qa.az), [xb, yb] = P.p(qb.alt, qb.az);
+          nowAng = Math.atan2(yb - ya, xb - xa);
+        }
       }
       marks.forEach(([tt, isStart], k) => {
         // 同じ分の時刻が重なるときは真ん中を省く
@@ -1573,19 +1578,13 @@ if (typeof module !== 'undefined') module.exports = Sat;
         const ang = Math.atan2(y2 - y1, x2 - x1);
         const c = Math.cos(ang), sn = Math.sin(ang);
         {
-          let ax = x, ay = y, ac = c, as = sn;
-          if (nowPt && Math.hypot(x - nowPt[0], y - nowPt[1]) < 13) {
-            for (let j = i + 1; j < p.fullPath.length - 1; j++) {
-              const [jx, jy] = P.p(p.fullPath[j].alt, p.fullPath[j].az);
-              if (Math.hypot(jx - nowPt[0], jy - nowPt[1]) >= 16) {
-                const [kx, ky] = P.p(p.fullPath[j + 1].alt, p.fullPath[j + 1].az), aa = Math.atan2(ky - jy, kx - jx);
-                ax = jx; ay = jy; ac = Math.cos(aa); as = Math.sin(aa); break;
-              }
-            }
-          }
+          // 今の位置の矢印と重なるときは、この矢印は省く
+          if (nowPt && Math.hypot(x - nowPt[0], y - nowPt[1]) < 13) { /* 省略 */ } else {
+          const ax = x, ay = y, ac = c, as = sn;
           const L = 9, Wd = 5;
           const tip = [ax + ac * L / 2, ay + as * L / 2], b1 = [ax - ac * L / 2 - as * Wd, ay - as * L / 2 + ac * Wd], b2 = [ax - ac * L / 2 + as * Wd, ay - as * L / 2 - ac * Wd];
           parts.push(`<polygon class="satarrow" points="${tip.map(v => v.toFixed(1))} ${b1.map(v => v.toFixed(1))} ${b2.map(v => v.toFixed(1))}"/>`);
+          }
         }
         // 文字は道すじの上側へ
         let nx = sn, ny = -c; if (ny > 0) { nx = -nx; ny = -ny; }
@@ -1594,7 +1593,11 @@ if (typeof module !== 'undefined') module.exports = Sat;
         const label = isStart ? `${s.short} ${M.hm(tt)}` : M.hm(tt);
         parts.push(`<text class="sattime" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}">${label}</text>`);
       });
-      if (nowPt) parts.push(`<circle class="satnow" cx="${nowPt[0].toFixed(1)}" cy="${nowPt[1].toFixed(1)}" r="4"/>`);
+      if (nowPt) {
+        const c = Math.cos(nowAng), sn = Math.sin(nowAng), L = 13, Wd = 7, [x, y] = nowPt;
+        const tip = [x + c * L / 2, y + sn * L / 2], b1 = [x - c * L / 2 - sn * Wd, y - sn * L / 2 + c * Wd], b2 = [x - c * L / 2 + sn * Wd, y - sn * L / 2 - c * Wd];
+        parts.push(`<polygon class="satnow" points="${tip.map(v => v.toFixed(1))} ${b1.map(v => v.toFixed(1))} ${b2.map(v => v.toFixed(1))}"/>`);
+      }
     }
 
     // 月
