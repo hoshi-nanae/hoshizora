@@ -238,6 +238,8 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
         </div>
         <span class="lrl">星座線の濃さ</span>
         <div class="chips fcMode" id="lnRow" role="group" aria-label="星座線の濃さ"><button data-ln="">ふつう</button><button data-ln="light">薄い</button><button data-ln="faint">とても薄い</button></div>
+        <span class="lrl">星の数</span>
+        <div class="chips fcMode" id="starRow" role="group" aria-label="星の数"><button data-st="auto">自動</button><button data-st="all">すべて</button><button data-st="bright">明るい星だけ</button></div>
         <span class="lrl">注目する星座</span>
         <div class="chips"><span id="fcChips"></span><select id="fcSel" aria-label="注目する星座を選ぶ"></select></div>
         <span class="lrl" id="fcModeL" hidden>ほかの星座は</span>
@@ -1414,7 +1416,10 @@ if (typeof module !== 'undefined') module.exports = Sat;
     // 星（肉眼モードでは空の明るさで見える等級を変える）
     const eyeLimit = sunAlt > -6 ? 1.5 : sunAlt > -12 ? 3.0 : 4.2;
     const stars = [];
+    // 星の数：自動なら、人工衛星の通り道を見ているときは明るい星（2.5等まで）だけ
+    const brightOnly = !P.eye && (starMode === 'bright' || (starMode === 'auto' && focus && focus.sat));
     for (const [ra, dec, mag] of STARS) {
+      if (brightOnly && mag > 2.5) continue;
       const h = S.horiz({ ra, dec }, ctx);
       if (!P.inside(h.alt, h.az)) continue;
       const [x, y] = P.p(h.alt, h.az);
@@ -2159,6 +2164,12 @@ if (typeof module !== 'undefined') module.exports = Sat;
   // ---- 表示の切り替え（星図と投稿用の画像に反映） ----
   const LAYERS = ['clines', 'cnames', 'snames', 'pname', 'faintpl', 'dir'];
   let hidden = store.get('midokoro-hide', []);
+  // 星の数（自動：人工衛星のときだけ明るい星にしぼる）
+  let starMode = store.get('midokoro-starmode', 'auto');
+  const renderStarMode = () => document.querySelectorAll('#starRow [data-st]').forEach(b => b.setAttribute('aria-pressed', b.dataset.st === starMode));
+  $('starRow').onclick = e => { const b = e.target.closest('[data-st]'); if (!b) return; starMode = b.dataset.st; store.set('midokoro-starmode', starMode); renderStarMode(); drawChart(); };
+  renderStarMode();
+
   // 星座線の濃さ（注目する星座の線はそのまま）
   let lineTone = store.get('midokoro-linetone', '');
   function applyLineTone() {
