@@ -69,6 +69,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #chart .stars circle { fill: #fffaf0; }
 #chart .cnames text { fill: #7f8ac0; font-size: 12px; font-family: var(--gothic); text-anchor: middle; opacity: .8; }
 #chart .snames text { fill: #c9cde6; font-size: 12px; font-family: var(--gothic); }
+#chart .planet { stroke: #0d1433; stroke-width: .9; }
 #chart .pname { fill: #fff3d0; font-size: 14px; font-weight: 500; font-family: var(--gothic); }
 #chart .pname.faint { fill: #8fa0c8; font-size: 11px; }
 #chart .moonname { fill: var(--moon); }
@@ -80,7 +81,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #chart .hand line { stroke: var(--dim); stroke-width: 1.2; }
 #chart .hand text { fill: var(--dim); font-size: 12px; font-family: var(--gothic); text-anchor: end; }
 .eyeNote { margin: 6px 0 0; font-size: 14px; color: var(--ink); }
-#chart .satpath { fill: none; stroke: #9fe3c8; stroke-width: 2; stroke-linecap: round; }
+#chart .satpath { fill: none; stroke: #9fe3c8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #chart .satpath.shadow { stroke: #9fe3c8; stroke-width: 1; stroke-dasharray: 3 4; opacity: .45; }
 #chart .satname { fill: #9fe3c8; font-size: 13px; font-weight: 500; font-family: var(--gothic); }
 #chart .satnow { fill: #9fe3c8; }
@@ -1174,7 +1175,7 @@ const Sat = (() => {
     // 描画用に、見えている前後の軌跡（高度0°以上）も持たせる
     for (const p of out) {
       p.fullPath = [];
-      for (let t = p.start - 6 * 60000; t <= p.end + 6 * 60000; t += 20000) {
+      for (let t = p.start - 6 * 60000; t <= p.end + 6 * 60000; t += 4000) {   // 4秒ごと（なめらかな線のため）
         const L = look(sat, t, obs);
         if (L && L.alt > -1) p.fullPath.push({ t, alt: L.alt, az: L.az, lit: L.lit });
       }
@@ -1523,7 +1524,40 @@ if (typeof module !== 'undefined') module.exports = Sat;
     parts.push(`<g class="snames${hasFc ? ' other' : ''}">${nm.join('')}</g>`);
     if (hasFc) parts.push(`<g class="snames fc">${nmFc.join('')}</g>`);
 
-    // 惑星
+    // 月（惑星より先に描き、惑星が月の上に見えるようにする）
+    const meq = S.moonTopo(t, obs), mh = S.horiz(meq, ctx);
+    let moonScr = null;   // 惑星の名前を月に重ねないために使う
+    if (mh.alt > -0.5 && P.inside(mh.alt, mh.az)) {
+      const [mx, my] = P.p(mh.alt, mh.az);
+      moonScr = { x: mx, y: my, r: P.eye ? 3 : (P.W === P.H ? 8 : 9) };
+      // 明るい惑星がすぐ近くにあるときは、月を少し小さく描いて惑星が隠れないようにする
+      if (!P.eye) for (const pl of M.PLANETS) {
+        if (pl.id === 'Uranus' || pl.id === 'Neptune') continue;
+        const ph = S.horiz(S.bodyEq(pl.id, t), ctx);
+        if (!P.inside(ph.alt, ph.az)) continue;
+        const [px2, py2] = P.p(ph.alt, ph.az), d = Math.hypot(px2 - mx, py2 - my);
+        moonScr.r = Math.min(moonScr.r, Math.max(4.5, d - 6));
+      }
+      const sh = S.horiz(S.bodyEq('Sun', t), ctx);
+      // 太陽の方向は、月から少しだけ太陽へ寄せた点で求める（投影のゆがみを避ける）
+      const tgt = towards(mh, sh, 5);
+      const [sx, sy] = P.p(tgt.alt, tgt.az);
+      const ang = Math.atan2(sy - my, sx - mx) * 180 / Math.PI;
+      const el = S.sep(S.bodyEq('Sun', t), meq);
+      if (P.eye) {
+        const diam = 2 * Math.asin(1737.4 / meq.dist) * 180 / Math.PI;      // 視直径（度）
+        const mr = diam / 2 * P.pxPerDeg;
+        parts.push(`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${(mr * 5).toFixed(1)}" fill="url(#glow)"/>`);
+        parts.push(moonSvg(mx, my, Math.max(2.2, mr), el, ang));
+      } else {
+        parts.push(moonSvg(mx, my, moonScr.r, el, ang));
+      }
+    }
+
+
+    // 惑星（先に全部の位置を求め、名前どうしが重ならないようにする）
+    const plBoxes = [], plDots = [];
+    for (const p of M.PLANETS) { const h = S.horiz(S.bodyEq(p.id, t), ctx); if (P.inside(h.alt, h.az) && h.alt >= 0) plDots.push(P.p(h.alt, h.az)); }
     for (const p of M.PLANETS) {
       const eq = S.bodyEq(p.id, t), h = S.horiz(eq, ctx);
       if (!P.inside(h.alt, h.az) || h.alt < 0) continue;
@@ -1532,7 +1566,23 @@ if (typeof module !== 'undefined') module.exports = Sat;
       if (P.eye && faint) continue;
       const pr = P.eye ? ({ Venus: 2.6, Jupiter: 2.2, Mars: 1.7, Saturn: 1.6, Mercury: 1.5 }[p.id]) : (faint ? 1.6 : 3.6) * P.scale;
       parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${pr}" fill="${p.color}" class="planet${faint ? ' faintpl' : ''}"/>`);
-      parts.push(`<text class="pname${faint ? ' faint faintpl' : ''}" x="${(x + 7).toFixed(1)}" y="${(y + 4).toFixed(1)}">${p.name}</text>`);
+      // 名前は右に置く。月に重なるときは、左・下・上の順に空いている側へ
+      let lx = x + 7, ly = y + 4, anchor = 'start';
+      {
+        const w = p.name.length * 13, hh = 14, R = moonScr ? moonScr.r + 2 : 0;
+        const cands = [[x + 7, y + 4, 'start'], [x - 7, y + 4, 'end'], [x, y + 18, 'middle'], [x, y - 9, 'middle']];
+        const box = ([cx, cy, an]) => { const x0 = an === 'start' ? cx : an === 'end' ? cx - w : cx - w / 2; return [x0, cy - hh * 0.8, x0 + w, cy + hh * 0.2]; };
+        const hits = c => {
+          const [x0, y0, x1, y1] = box(c);
+          if (moonScr) { const nx = Math.max(x0, Math.min(moonScr.x, x1)), ny = Math.max(y0, Math.min(moonScr.y, y1)); if (Math.hypot(nx - moonScr.x, ny - moonScr.y) < R) return true; }
+          // ほかの惑星の点や名前とも重ねない
+          return plBoxes.some(o => x0 < o[2] && x1 > o[0] && y0 < o[3] && y1 > o[1]) || plDots.some(([dx, dy]) => dx > x0 - 4 && dx < x1 + 4 && dy > y0 - 4 && dy < y1 + 4 && !(dx === x && dy === y));
+        };
+        const ok = cands.find(c => !hits(c)) || cands[0];
+        [lx, ly, anchor] = ok;
+        plBoxes.push(box(ok));
+      }
+      parts.push(`<text class="pname${faint ? ' faint faintpl' : ''}" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}"${anchor !== 'start' ? ` text-anchor="${anchor}" style="text-anchor:${anchor}"` : ''}>${p.name}</text>`);
     }
 
     // 人工衛星の通り道
@@ -1600,25 +1650,6 @@ if (typeof module !== 'undefined') module.exports = Sat;
       }
     }
 
-    // 月
-    const meq = S.moonTopo(t, obs), mh = S.horiz(meq, ctx);
-    if (mh.alt > -0.5 && P.inside(mh.alt, mh.az)) {
-      const [mx, my] = P.p(mh.alt, mh.az);
-      const sh = S.horiz(S.bodyEq('Sun', t), ctx);
-      // 太陽の方向は、月から少しだけ太陽へ寄せた点で求める（投影のゆがみを避ける）
-      const tgt = towards(mh, sh, 5);
-      const [sx, sy] = P.p(tgt.alt, tgt.az);
-      const ang = Math.atan2(sy - my, sx - mx) * 180 / Math.PI;
-      const el = S.sep(S.bodyEq('Sun', t), meq);
-      if (P.eye) {
-        const diam = 2 * Math.asin(1737.4 / meq.dist) * 180 / Math.PI;      // 視直径（度）
-        const mr = diam / 2 * P.pxPerDeg;
-        parts.push(`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${(mr * 5).toFixed(1)}" fill="url(#glow)"/>`);
-        parts.push(moonSvg(mx, my, Math.max(2.2, mr), el, ang));
-      } else {
-        parts.push(moonSvg(mx, my, P.W === P.H ? 8 : 12, el, ang));
-      }
-    }
 
 
     // 地平線と方位
