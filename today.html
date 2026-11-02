@@ -70,7 +70,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 #chart .cnames text { fill: #7f8ac0; font-size: 12px; font-family: var(--gothic); text-anchor: middle; opacity: .8; }
 #chart .snames text { fill: #c9cde6; font-size: 12px; font-family: var(--gothic); }
 #chart .planet { stroke: #0d1433; stroke-width: .9; }
-#chart .pname { fill: #fff3d0; font-size: 14px; font-weight: 500; font-family: var(--gothic); }
+#chart .pname { fill: #fff3d0; font-size: 12px; font-weight: 500; font-family: var(--gothic); }
+#chart.ln-light .clines:not(.fc) polyline { opacity: .3; }
+#chart.ln-faint .clines:not(.fc) polyline { opacity: .15; }
 #chart .pname.faint { fill: #8fa0c8; font-size: 11px; }
 #chart .moonname { fill: var(--moon); }
 #chart .ring { fill: none; stroke: var(--gold); stroke-width: 1.4; stroke-dasharray: 5 5; opacity: .9; }
@@ -234,6 +236,8 @@ footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rim); 
           <button data-layer="clines">星座線</button><button data-layer="cnames">星座名</button><button data-layer="snames">星の名前</button>
           <button data-layer="pname">惑星名</button><button data-layer="faintpl">天王星・海王星</button><button data-layer="dir">方角</button>
         </div>
+        <span class="lrl">星座線の濃さ</span>
+        <div class="chips fcMode" id="lnRow" role="group" aria-label="星座線の濃さ"><button data-ln="">ふつう</button><button data-ln="light">薄い</button><button data-ln="faint">とても薄い</button></div>
         <span class="lrl">注目する星座</span>
         <div class="chips"><span id="fcChips"></span><select id="fcSel" aria-label="注目する星座を選ぶ"></select></div>
         <span class="lrl" id="fcModeL" hidden>ほかの星座は</span>
@@ -2155,6 +2159,15 @@ if (typeof module !== 'undefined') module.exports = Sat;
   // ---- 表示の切り替え（星図と投稿用の画像に反映） ----
   const LAYERS = ['clines', 'cnames', 'snames', 'pname', 'faintpl', 'dir'];
   let hidden = store.get('midokoro-hide', []);
+  // 星座線の濃さ（注目する星座の線はそのまま）
+  let lineTone = store.get('midokoro-linetone', '');
+  function applyLineTone() {
+    const svg = $('chart');
+    svg.classList.toggle('ln-light', lineTone === 'light'); svg.classList.toggle('ln-faint', lineTone === 'faint');
+    document.querySelectorAll('#lnRow [data-ln]').forEach(b => b.setAttribute('aria-pressed', b.dataset.ln === lineTone));
+  }
+  $('lnRow').onclick = e => { const b = e.target.closest('[data-ln]'); if (!b) return; lineTone = b.dataset.ln; store.set('midokoro-linetone', lineTone); applyLineTone(); };
+  applyLineTone();
   function applyLayers() {
     const svg = $('chart');
     LAYERS.forEach(k => svg.classList.toggle('hide-' + k, hidden.includes(k)));
